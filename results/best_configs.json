@@ -3,7 +3,7 @@
     "naive_window": 4,
     "ridge": {
       "config_id": 35,
-      "mean_val_rmse": 0.5032705123169899,
+      "mean_val_rmse": 0.5032705123169898,
       "params": {
         "ridge__alpha": 455.8074684027333
       }

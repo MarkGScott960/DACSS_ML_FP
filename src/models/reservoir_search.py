@@ -41,7 +41,7 @@ from src.models.readout import LAMBDAS, ridge_path
 from src.models.reservoir_data import build_inputs
 from src.networks.connectome import build_connectome, spectral_radius, weight_matrix
 from src.networks.controls import make_control
-from src.networks.reservoir import scale_to_rho, simulate
+from src.networks.reservoir import ema_bank, scale_to_rho, simulate
 
 SPACE = {"rho": uniform(0.3, 1.1),            # spectral radius 0.3 - 1.4
          "input_scale": loguniform(0.02, 2.0),
@@ -187,6 +187,21 @@ class ReservoirLab:
                 rm = np.array([np.sqrt(np.mean((y[va][:, None] - p) ** 2, axis=0)) for va, p in zip(vam, P)])
                 ma = np.array([np.mean(np.abs(y[va][:, None] - p), axis=0) for va, p in zip(vam, P)])
                 out[(v, h)] = (rm, ma, P if predictions else None)
+        return out
+
+    def evaluate_ema(self, leaks, horizons=None, predictions: bool = False):
+        """No-reservoir baseline: ridge on [moving averages of the inputs at each leak, raw inputs].
+        Same folds, rows and ridge path as `evaluate`. Returns {h: (rmse[fold, lam], mae, preds or None)}."""
+        E = ema_bank(self.inp.U, self.inp.starts, self.inp.ends, leaks)
+        out = {}
+        for h in (horizons or self.horizons):
+            ti, si = self.loc[h]
+            Z = np.concatenate([E[ti, si], self.inp.R[ti, si]], axis=1)
+            trm, vam = self.masks[h]; y = self.y[h]
+            P = ridge_path(Z, y, trm, vam)
+            rm = np.array([np.sqrt(np.mean((y[va][:, None] - p) ** 2, axis=0)) for va, p in zip(vam, P)])
+            ma = np.array([np.mean(np.abs(y[va][:, None] - p), axis=0) for va, p in zip(vam, P)])
+            out[h] = (rm, ma, P if predictions else None)
         return out
 
 

@@ -62,10 +62,7 @@ The mushroom body is independently a reservoir-like structure, which is the theo
 - Tier 2 precedent: Lappalainen et al. (Nature 2024) trained a connectome-constrained fly visual system with backprop
 - Tier 3: the mushroom body is where real flies learn; dopamine acts as reward/punishment
 - **Deliverable = Tiers 1 + 2 + controls. Tier 3 = extension.**
-- **Tier 2 kept in scope (decided 2026-10-02, after Tier 1 tied the controls).** The question: can the connectome *learn* when its weights (and possibly its connections) are allowed to change? Open design points, to settle after notebook 09's mechanism results:
-  - which weights learn: all existing connections, only KC→MBON (where real flies learn), or also adding/removing connections (structural plasticity);
-  - how: backpropagation through time on the forecasting loss, starting from the fly weights;
-  - **the fair control:** the same training, same budget, starting from the shuffled / rewired / ER networks. "The fly learns" means nothing without "and a random network given the same training learns less".
+- **Tier 2 kept in scope (decided 2026-10-02, after Tier 1 tied the controls).** The question: can the connectome *learn* when its connections and weights are allowed to change? Full design in "Tier 2 Design (DRAFT)" below.
 
 ## Dataset Decision (SETTLED)
 **FAFB v783 — FlyWire Female Adult Fly Brain — with Princeton synapses.**
@@ -291,13 +288,13 @@ Each control isolates what about the fly matters. Run every control through ever
 ### Robustness / "No Stone Unturned" Checklist
 Principle: **clean spine, deep appendix.** Every extra analysis rules out an alternative explanation.
 - [x] Multiple random seeds, confidence intervals on every result (seeds 1–5 + country-cluster bootstrap, notebooks 06, 08, 09)
-- [ ] **Equivalence bounds** — largest fly advantage still consistent with the data, as a share of the history gap (09 §7)
-- [ ] **Mechanism** — linear reservoir and no-recurrence leaky banks (09 §9): is the memory the network, or just leaky integration?
+- [x] **Equivalence bounds** — largest fly advantage still consistent with the data, as a share of the history gap (09 §7, §9c): at most 6.4% for tanh networks, about 1.2% for linear
+- [x] **Mechanism** — linear reservoir, no-recurrence leaky banks, and ridge on plain moving averages (09 §9, §9c): the memory is leaky integration, not the network
 - [ ] Hyperparameter sweeps (spectral radius × input scaling heat maps)
 - [ ] **APL ablation** — remove 2 neurons, recompute SCC and performance. "How much of the fly's advantage rests on a single pair of cells?"
 - [ ] **Glutamate sign flip** — does the result survive the opposite convention?
 - [ ] **Weight scheme comparison** — raw vs log1p vs binary vs input-fraction
-- [~] **MBON-only vs full-state readout** — done vs 1,024 random units; size-matched 96 random units in 09 §10
+- [x] **MBON-only vs full-state readout** — MBONs are worse than 1,024 random units and rank last of six against five random 96-unit sets at every horizon (09 §4, §10)
 - [ ] **Hemisphere replication** — fit left, test right
 - [ ] **MCNS replication** — a second connectome, different consortium, different animal. Frame as *robustness across independent reconstructions*, NOT male vs female (a sex difference in forecasting skill would more plausibly reflect reconstruction pipelines than biology).
 - [ ] Threshold sweep upward (10+); downward requires the no-threshold file
@@ -327,9 +324,40 @@ Mean validation RMSE on log(1 + deaths), 40 random configs per family, tuned nai
 
 ## Results So Far: Tier 1 Reservoirs (notebooks 07–09; folds 1–5 only)
 - **07–08, all 28 features as inputs:** every reservoir equals ridge (differences ≤ 0.001). The features already hold the history, so the readout switches the states off. Uninformative about wiring.
-- **09, 12 history-free inputs:** reservoirs recover 89–98% of the gap between ridge on current values (A) and ridge on all 28 features (B). The fly ties every control; random (ER) is nominally best. Any fly advantage is bounded at about 6% of the history gap at most, and under 2% at most horizons.
-- Best `input_scale` sits at the bottom of its range → reservoirs prefer the near-linear regime, which likely explains the tie. Tested in 09 §9.
-- Details and tables: [[ML FP Progress Log]].
+- **09, 12 history-free inputs.** Ridge on current values (A) vs ridge on all 28 features (B): 0.567/0.649/0.707/0.757 vs 0.503/0.571/0.622/0.689 (h = 1/3/6/12).
+
+| network | h1 | h3 | h6 | h12 |
+|---|---|---|---|---|
+| fly (tanh) | 0.5051 | 0.5754 | 0.6267 | 0.6960 |
+| random ER (tanh) | 0.5046 | 0.5738 | 0.6248 | 0.6936 |
+| fly (linear) | 0.5027 | 0.5729 | 0.6237 | 0.6926 |
+| random ER (linear) | 0.5027 | 0.5722 | 0.6225 | 0.6916 |
+| bank_multi (no recurrence) | 0.5023 | 0.5736 | 0.6241 | 0.6919 |
+
+- Reservoirs recover 89–102% of the A–B gap. The fly ties weight-shuffled, rewired and random networks; a fly advantage above about 6% of the gap (tanh) or 1.2% (linear) is ruled out.
+- **Mechanism:** linear ≥ tanh; a bank of independent leaky units with no connections ties every network; ridge on plain moving averages of the inputs lands within about 0.0006 at h = 3–12 (09 §9c). The reservoirs supply multi-time-scale leaky averaging, which B's lags and rolling means already approximate.
+- **MBON readout:** worse than random units of the same size at every horizon.
+- **Onset AP:** a reservoir (not fly) gain over B at h=12 only, driven by folds 1, 3, 4; exploratory.
+- **Implication for Tier 2:** RF/GB did not beat ridge, tanh did not beat linear, and no reservoir beats B, so the signal looks close to linear in a multi-scale history. Training weights on the conflict target may tie ridge too; Tier 2b exists to tell "no nonlinear signal" from "cannot learn".
+- Details: [[ML FP Progress Log]].
+
+## Tier 2 Design (DRAFT, 2026-10-02)
+**What Tier 2 is.** Tier 1 froze every connection and trained only the readout. Tier 2 lets the connectome itself change with training. The question: **can the fly's wiring learn, and does it learn better than a random network given the same training?**
+
+**2a. Trained weights on the conflict target (the required deliverable; this is the Tier 2 in the tier table).**
+- *Trained:* the strength of each of the 97,051 existing connections (92,642 carry signal), plus the input matrix PN ← 12 features and the readout. Each neuron keeps its sign (excitatory or inhibitory, from the neurotransmitter), so only magnitudes move: W = sign ⊙ softplus(θ). Start at the Tier 1 fly weights, rescaled to the tuned spectral radius.
+- *How:* backpropagation through time on the forecasting loss (MSE on log(1 + deaths)), 36-month windows, 178 country sequences per batch, AdamW. All four horizons from one multi-output head to keep compute manageable. One model per fold, network and seed.
+- *Early stopping:* on an inner validation window (the last 24 months of each fold's training data). Folds 1–5 stay the outer evaluation; the 2021–2025 test set is not touched.
+- *Fair controls (same parameters, same budget, same stopping rule):* trained shuffled, trained rewired, trained ER, and an unconstrained GRU with a similar parameter count. Reference: the frozen Tier 1 result for each network.
+- *Reading the result:* fly-trained vs control-trained (paired country-cluster bootstrap, ≥ 5 seeds), and trained vs frozen for each network. "The fly learns" only counts if it learns *more than the controls*.
+
+**2b. Diagnostic task where learning and nonlinearity are required (answers "can the fly learn at all?").** NARMA-10 and delayed parity, a nonlinear-memory benchmark with a known answer. Frozen vs trained, fly vs controls. If the trained fly beats frozen and controls here but ties on conflict, the conflict data simply has no nonlinear signal to learn; if it does not, that is a finding about the connectome.
+
+**2c. Structural plasticity (extension; changing *which* neurons connect).** Beyond the tier table's Tier 2, which keeps connections fixed. (i) *Pruning:* a learnable gate on each of the 97k connections with a sparsity penalty: which connections does the task need? (ii) *Growth:* a fixed connection budget with periodic drop-and-grow (e.g. RigL-style: remove the weakest, add the absent pairs with the largest gradient). Compare the learned wiring with the fly's (overlap of edges), and fly-start vs ER-start. Cut if time is short.
+
+**Feasibility checks before building:** PyTorch install under Python 3.14; time one sparse BPTT epoch (178 × 5,891 states, 36-month windows, 97k non-zero weights; memory about 150 MB per layer per window, which should fit on a laptop CPU).
+
+**Leakage rules:** every training row's target month ≤ the fold's train end; inner validation is carved from the training window only; scaler and input matrices as in Tier 1; no look at the locked test set until every model and hyperparameter is fixed.
 
 ## RL Agent Thread
 Keep the follow-on in mind throughout so the class project builds toward it.
@@ -352,7 +380,7 @@ Keep the follow-on in mind throughout so the class project builds toward it.
 ## Revised Timeline
 **Deviation from the original plan:** connectome was loaded *before* the conflict data, to verify feasibility before investing in data acquisition. Justified — the mushroom body could have turned out to be feedforward and unusable, which would have invalidated the whole approach.
 
-**Status (2026-10-02):** the conflict pipeline, baselines and Tier 1 (full-feature and history-free experiments, with controls) are done. Tier 1 is a tightly bounded null: the fly ties weight-shuffled, rewired and random networks. Next: the mechanism checks in notebook 09, then Tier 2.
+**Status (2026-10-02):** the conflict pipeline, baselines and Tier 1 (full-feature and history-free experiments, controls, and the mechanism checks) are done. Tier 1 is a tightly bounded null: the fly ties weight-shuffled, rewired and random networks, and a bank of leaky units with no connections. Next: Tier 2 (feasibility check, then 2a, 2b, optionally 2c).
 
 | Week | Syllabus | Project work | RL thread |
 |---|---|---|---|

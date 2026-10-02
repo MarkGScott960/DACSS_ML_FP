@@ -54,6 +54,24 @@ def simulate(W: sp.csr_matrix, pn_idx: np.ndarray, W_in: np.ndarray, U: np.ndarr
     return out
 
 
+def ema_bank(U: np.ndarray, starts: np.ndarray, ends: np.ndarray, leaks) -> np.ndarray:
+    """Exponential moving averages of every input at several leak rates, with the same
+    per-country start/reset handling as `simulate`. This is a reservoir with NO units
+    beyond the inputs: x(t) = (1 - leak) * x(t-1) + leak * u(t), one copy per leak.
+    Returns (T, S, F * len(leaks)), leak-major. Used as the 'no reservoir at all' baseline."""
+    T, S, F = U.shape
+    lk = np.asarray(leaks, np.float32)[:, None, None]
+    X = np.zeros((len(lk), S, F), np.float32)
+    out = np.zeros((T, S, F * len(lk)), np.float32)
+    for t in range(T):
+        X[:, starts == t, :] = 0.0
+        active = (starts <= t) & (t <= ends)
+        X = (1.0 - lk) * X + lk * U[t][None]
+        X[:, ~active, :] = 0.0
+        out[t] = X.transpose(1, 0, 2).reshape(S, -1)
+    return out
+
+
 def echo_state_gap(W, pn_idx, W_in, U, starts, ends, leak, input_scale, seed=0, months=60):
     """Fading-memory check: run the same inputs from two different random initial
     states and report the largest state difference at the end of `months` months."""

@@ -403,21 +403,73 @@ Smaller points, disclosed rather than fixed:
 - `src/models/reservoir_search.py`: `SPACE_LINEAR`, `SPACE_BANK`; no-recurrence banks `bank_single` / `bank_multi` (1,024 independent leaky units; one leak rate vs per-unit leak rates); `lab.add_random96(k)` for size-matched readouts; only the read-out nodes are stored (less memory, identical results — verified: fly and ER h=1 reproduce the logged 0.505084 and 0.504602 exactly); **log fingerprint guard**: `tune()` writes `<log>.fingerprint.json` (hash of inputs and config list) and refuses to resume a log written with different inputs or configs.
 - `src/eval/paired.py`: `cluster_bootstrap_ap_diff` (country-cluster bootstrap for average precision; matches sklearn's AP exactly, ties included).
 - Notebook 09: section 7 equivalence bounds; 8 onset AP bootstrap and per-fold AP; 9 linear reservoirs and no-recurrence banks with seeds and paired tests; 10 MBONs vs five random 96-unit readouts; 11 reading guide. Quick test passed.
-- Early signal from smoke tests (3 random configs, not results): linear fly h=1 0.5037 (better than tanh best 0.5051); `bank_multi` h=1 0.5061 with no recurrence; random 96-unit readouts beat MBON at one config.
+- Smoke-test signals (3 random configs) were confirmed by the full run: see the next entry.
+
+---
+
+## Re-run of notebooks 01–09 and second review (2026-10-02, evening)
+
+### Verification
+- All nine notebooks re-run in order with `QUICK_TEST = False`: no errors, no stderr, every code cell executed (02 and 05, which had unsaved or stale cells, are now complete).
+- **Reproducibility:** 05–08 and 09 §1–6 reproduced the earlier numbers exactly (leaderboard, paired CSVs, best configs). Pooled and fold-mean RMSE for all 9 models recomputed independently from the saved predictions match the tables.
+- 02 and 04 outputs match this log (75,703 country-months, 178 states, 444 months; 28 features; 72,079 usable origins; leakage audit 0 of 28).
+- Commit `1f455e8` ("First Computing Test (0-9 Jup)") is on origin. Later diffs in `MANIFEST.json` and `Planning/` are line endings only; every data hash is unchanged.
+
+### Results, notebook 09 sections 7–10 (mean validation RMSE, folds 1–5)
+| model | h1 | h3 | h6 | h12 |
+|---|---|---|---|---|
+| A: ridge, current values | 0.5672 | 0.6491 | 0.7066 | 0.7569 |
+| B: ridge, 28 features | 0.5033 | 0.5707 | 0.6216 | 0.6887 |
+| fly (tanh) | 0.5051 | 0.5754 | 0.6267 | 0.6960 |
+| weight-shuffled (tanh) | 0.5055 | 0.5747 | 0.6257 | 0.6956 |
+| rewired (tanh) | 0.5064 | 0.5749 | 0.6261 | 0.6957 |
+| random ER (tanh) | 0.5046 | 0.5738 | 0.6248 | 0.6936 |
+| fly (linear) | 0.5027 | 0.5729 | 0.6237 | 0.6926 |
+| random ER (linear) | 0.5027 | 0.5722 | 0.6225 | 0.6916 |
+| bank_single (no recurrence, one time scale) | 0.5084 | 0.5763 | 0.6285 | 0.6963 |
+| **bank_multi (no recurrence, many time scales)** | **0.5023** | 0.5736 | 0.6241 | 0.6919 |
+
+- **Memory recovered** (A − model)/(A − B): tanh 0.89–0.98; linear 0.94–1.01; bank_multi 0.95–1.02; bank_single 0.89–0.93. Values above 1 are within noise of B: do not write "better than the hand-built history".
+- **Linear ≥ tanh** at every horizon (fly: 0.0024–0.0035 better; individually not significant, same sign everywhere). The linear search had 20 configurations against 40 for tanh, so this is conservative.
+- **No-recurrence bank ties every network.** bank_multi vs B: −0.0010 to +0.0034, all intervals span 0. Fly (tanh) vs bank_multi: +0.0019 to +0.0040 (bank better), none significant. bank_multi beats bank_single at h=1 (−0.0061, significant) and nominally elsewhere.
+- **Fly (linear) vs ER (linear):** +0.0000 to +0.0012, none significant; ER is nominally better at all four horizons. Worst-case fly advantage (lower interval bound / pooled A−B gap): 1.2%, 0.4%, 0.5%, 1.0% at h = 1/3/6/12. For tanh the maximum over all 12 fly-vs-control comparisons is 6.4%.
+- **MBON readout:** the 96 MBONs rank last of six against five random 96-unit readouts at every horizon (e.g. h=1: 0.5125 vs random 0.5047–0.5064; 1,024 random units 0.5051). The biological readout is not special for this task. Caveat: the random sets are drawn from all nodes, about 88% Kenyon cells.
+- **Onset AP (§8):** only h=12 vs B is significant: fly +0.032 [0.005, 0.054], ER +0.038 [0.003, 0.062]. Driven by folds 1, 3 and 4 (e.g. fold 3: fly 0.165 vs B 0.123); folds 2 and 5 flat. Fly vs A (no memory) not significant. A reservoir effect, not a fly effect; 2 of 16 correlated tests. Exploratory only.
+- **Seeds:** mechanism seeds (3 new): sd 0.0001–0.0005.
+- **Edge-of-range:** best ridge penalty at the bottom of the grid for all linear and bank models at h=1 (and shuffled/rewired tanh at h=1; effect probably negligible, not tested); bank_multi's slowest leak is 0.012 at h=12 against a lower bound of 0.01 and RMSE still improves with slower leaks (Spearman +0.65).
+- **Exploratory baseline with no reservoir** (run outside the repo, now built into §9c): ridge on exponential moving averages of the 12 inputs, 3 leaks (0.5, 0.15, 0.04) → 0.5056 / 0.5733 / 0.6239 / 0.6916; 6 leaks → 0.5059 / 0.5737 / 0.6242 / 0.6917. Within about 0.0006 of the linear reservoirs at h = 3, 6, 12; 0.003 behind at h=1 (fewer time scales). Only the ridge penalty is chosen (12 values), so its budget is smaller than the reservoirs'. Confirm with the §9c output once notebook 09 is re-run.
+
+### Interpretation
+1. The reservoir mechanism works, but the memory it supplies is multi-time-scale leaky averaging of the inputs. A bank of independent leaky units supplies it just as well, and so does a plain set of moving averages. B's lags and rolling means already approximate it, so no reservoir beats B.
+2. The connectome's wiring contributes nothing detectable: the fly ties shuffled, rewired and random networks, and a no-recurrence bank. The bound on any fly advantage is 1–6% of the history gap.
+3. Random forest and gradient boosting did not beat ridge (05–06), tanh did not beat linear (09), and no reservoir beats B. The forecasting signal appears to be close to linear in a multi-scale history of log deaths. This matters for Tier 2: training weights on this target may also tie ridge. Tier 2b (a diagnostic task where nonlinear memory is required) is how to tell "no nonlinear signal in the data" apart from "the fly cannot learn".
+
+### Disclosures for the methods section
+- Tanh search: 40 configurations; linear and bank: 20 each. The tuning picks the best configuration on the same folds that are reported (mildly optimistic). Paired tests use the seed-0 best configuration; use seed means as the headline.
+- Two RMSE definitions: mean of fold RMSEs (leaderboards, memory recovered) and pooled RMSE (row-type tables, bootstraps). Label each table.
+- The fingerprint guard covers inputs and config lists, not reservoir or readout code, `LAMBDAS`, or the readout node set: delete the logs after changing those.
+
+### Decisions
+- Null result is the headline, framed as a bound with the mechanism as the explanation.
+- Tier 2 stays in scope; design drafted in the Final Project Guide (2a trained weights, 2b diagnostic task, 2c structural plasticity as an extension).
+- Added §9c to notebook 09 (no-reservoir baseline, mechanism bounds); `src/networks/reservoir.py::ema_bank` and `ReservoirLab.evaluate_ema` (reproduce the exploratory numbers exactly).
+- Large tuning logs are no longer committed (`.gitignore`); `.gitattributes` normalises line endings.
 
 ---
 
 ## Current State
-**Done and verified:** connectome (MB + 285 ALPNs, 5,891 neurons), panel, features (28; leakage audit passes), rolling-origin folds with locked test, tuned baselines (05), paired baseline comparison (06), full-feature reservoir experiment (07–08: states switched off, uninformative about wiring), history-free memory test (09: reservoirs recover 89–98% of the history gap; fly ties every control).
-**Built, not yet run in full:** notebook 09 sections 7–10 (bounds, onset AP, mechanism, MBON vs random 96).
-**Not started:** MLP baseline, Tier 2 (learning), robustness checks (APL ablation, glutamate sign flip, weight schemes), locked-test evaluation.
+**Tier 1 is complete.** Panel, features (leakage-audited), rolling-origin folds with a locked test set, tuned baselines, paired comparisons, the fly reservoir with three controls (full features: states switched off; history-free: reservoirs recover 89–102% of the history gap), the mechanism checks (linear, no-recurrence banks, size-matched readout) and the no-reservoir baseline.
+**Result:** a tightly bounded null on wiring (a fly advantage above 1–6% of the history gap is ruled out), explained by the mechanism: the reservoirs supply leaky averaging, which independent leaky units and plain moving averages supply equally.
+**Pending:** run notebook 09 once more to execute §9c (a few minutes; every other cell reuses its log).
+**Not started:** Tier 2 (trained weights, diagnostic task, structural plasticity), MLP baseline, robustness checks (APL ablation and glutamate flip deprioritised while the fly ties random networks), locked-test evaluation.
 
 ## Immediate Next Steps
-1. Commit and push (README, Planning, notebooks, `src/`, `results/` CSVs).
-2. Re-run notebooks 01–09 in order (01 skips files whose hash matches; 05 and 07–09 resume from their logs). Expected new compute: about 2–3 hours, all in 09 sections 9–10.
-3. Review sections 7–10: does linear ≈ tanh? does `bank_multi` ≈ networks? is the onset AP gain real? where do the MBONs rank?
-4. Design Tier 2 (which weights learn, how, and what the fair control is — a trained random network with the same budget).
-5. MLP baseline (same folds and budget).
-6. Robustness checks only where they can still change a conclusion; deprioritise APL ablation and sign flip while the fly ties random networks.
-7. Locked-test evaluation, once, at the very end.
-8. Email Dr. Adler re: social-phenomenon strictness (if not already done).
+1. Re-run notebook 09 (executes §9c); commit; push.
+2. Optional one-off: extend the ridge penalty grid two decades lower for the six best linear and bank configurations at h=1 and confirm nothing moves.
+3. Tier 2 feasibility: install PyTorch under Python 3.14 and time sparse backpropagation through 36-month windows for 178 countries with the 97k existing connections.
+4. Build Tier 2a (see the guide): train existing weights from fly, shuffled, rewired and ER starts, plus a GRU of similar size, with an inner validation window for early stopping and 5 seeds.
+5. Tier 2b: nonlinear memory benchmark (NARMA-10, delayed parity) for frozen and trained fly vs controls.
+6. Tier 2c (extension): learnable connection gates and budgeted rewiring.
+7. MLP baseline (same folds and budget).
+8. Locked-test evaluation, once, at the end.
+9. Email Dr. Adler re: social-phenomenon strictness (if not already done).
