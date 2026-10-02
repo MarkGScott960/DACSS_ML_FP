@@ -1,0 +1,25 @@
+horizon,A,B,diff,lo,hi,p_a_better,significant
+1,fly,ridge,-0.00066,-0.0014,0.0001,0.957,False
+1,fly,naive (best window),-0.02569,-0.03479,-0.01574,1.0,True
+1,fly,weight-shuffled,-0.00011,-0.0002,-2e-05,0.993,True
+1,fly,degree-preserving rewired,0.00068,-0.00161,0.00296,0.282,False
+1,fly,random (Erdős–Rényi),0.00013,-0.00098,0.0012,0.409,False
+1,ridge,naive (best window),-0.02504,-0.03401,-0.01535,1.0,True
+3,fly,ridge,-0.00055,-0.00205,0.00098,0.759,False
+3,fly,naive (best window),-0.01903,-0.03195,-0.00581,0.9985,True
+3,fly,weight-shuffled,0.00013,-0.00104,0.00127,0.442,False
+3,fly,degree-preserving rewired,-0.00027,-0.00177,0.00129,0.67,False
+3,fly,random (Erdős–Rényi),0.00095,-0.00138,0.00299,0.209,False
+3,ridge,naive (best window),-0.01848,-0.03118,-0.00554,0.9985,True
+6,fly,ridge,-0.00101,-0.00378,0.00176,0.7565,False
+6,fly,naive (best window),-0.01146,-0.02458,-0.0004,0.9805,True
+6,fly,weight-shuffled,-0.0002,-0.00121,0.00079,0.6415,False
+6,fly,degree-preserving rewired,-0.00032,-0.00126,0.0006,0.7435,False
+6,fly,random (Erdős–Rényi),0.00077,-0.00303,0.00391,0.3215,False
+6,ridge,naive (best window),-0.01045,-0.02288,0.00064,0.9645,False
+12,fly,ridge,-0.00098,-0.00373,0.00166,0.7685,False
+12,fly,naive (best window),-0.02127,-0.04153,-0.00099,0.9795,True
+12,fly,weight-shuffled,-0.0002,-0.00052,0.00016,0.8755,False
+12,fly,degree-preserving rewired,-0.0003,-0.00078,0.00016,0.888,False
+12,fly,random (Erdős–Rényi),0.00064,-0.00222,0.00349,0.3525,False
+12,ridge,naive (best window),-0.02029,-0.04003,-0.00029,0.977,True

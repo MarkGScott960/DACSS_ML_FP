@@ -62,6 +62,10 @@ The mushroom body is independently a reservoir-like structure, which is the theo
 - Tier 2 precedent: Lappalainen et al. (Nature 2024) trained a connectome-constrained fly visual system with backprop
 - Tier 3: the mushroom body is where real flies learn; dopamine acts as reward/punishment
 - **Deliverable = Tiers 1 + 2 + controls. Tier 3 = extension.**
+- **Tier 2 kept in scope (decided 2026-10-02, after Tier 1 tied the controls).** The question: can the connectome *learn* when its weights (and possibly its connections) are allowed to change? Open design points, to settle after notebook 09's mechanism results:
+  - which weights learn: all existing connections, only KC→MBON (where real flies learn), or also adding/removing connections (structural plasticity);
+  - how: backpropagation through time on the forecasting loss, starting from the fly weights;
+  - **the fair control:** the same training, same budget, starting from the shuffled / rewired / ER networks. "The fly learns" means nothing without "and a random network given the same training learns less".
 
 ## Dataset Decision (SETTLED)
 **FAFB v783 — FlyWire Female Adult Fly Brain — with Princeton synapses.**
@@ -149,7 +153,7 @@ Three outputs, so Tier 3 needs no refactor:
 
 Tiers 1–2 ignore the mask; Tier 3 uses it.
 
-### Weight scaling (OPEN — decide before Tier 1)
+### Weight scaling (SETTLED for first runs 2026-10-02: fraction of postsynaptic input; others are robustness checks)
 Raw synapse counts let APL's ~28-synapse edges dominate KC→KC's ~6.4 by 4×.
 
 | Scheme | Effect |
@@ -204,20 +208,69 @@ No MBON→anything appears in the top-20 flows — they are near-pure sinks rece
 
 If 96 dimensions approach 5,600, evolution picked a good 1.7% of the state space. One extra ridge fit, directly serving the research question.
 
-## Data (NOT YET STARTED)
-- **UCDP Georeferenced Event Data (GED):** free, event-level fatalities, aggregate to country-month
-- **ViEWS** ([viewsforecasting.org](https://viewsforecasting.org)): published monthly forecasts + benchmark data
-- **ACLED:** richer events, check access/licensing terms first
-- Covariates (add once the pipeline works): population, GDP, regime type (V-Dem), neighbouring conflict, past fatalities
-- Unit of analysis: **country-month panel** (~190 countries × decades = tens of thousands of samples, enough for Tier 2)
-- Target options: log fatalities next month (regression) or any conflict next month (classification; UCDP threshold is ≥25 battle deaths)
-- **Onsets vs continuation:** conflict is highly persistent. Report onsets separately — that's where forecasting is hard and interesting.
+## Data (BUILT — panel in `notebooks/02_clean_join_describe.ipynb`)
+Settled 2026-10-01. Full reasoning in [[ML FP Progress Log#2026-10-01 — Data collection plan and validation design]].
+
+- **Language:** Python 3.14 throughout. One environment (`requirements.txt`) for the panel, baselines, and reservoir.
+- **Code format:** runnable pipeline steps are **numbered Jupyter notebooks** in `notebooks/` (`01_download.ipynb`, `02_panel.ipynb`, …), run in VS Code. Reusable functions live in `src/` and are imported by the notebooks, so logic is never copy-pasted between notebooks.
+- **Primary source: UCDP GED 26.1, the frozen annual release** (events 1989–2025). Downloaded as a static file (not the API, which now requires a token). Version and file hash recorded at download.
+- **Not the monthly Candidate data for modelling.** Candidate events are preliminary and are revised at each annual release; scoring test months against data that later changes is unsound. Candidate data is used **only** for the live November 2026 check (see Validation Design).
+- **ViEWS:** benchmark forecasts for comparison, added after the baselines exist.
+- **ACLED:** not used for now (licensing, and GED is sufficient).
+- **Unit of analysis:** country-month panel. **Universe: Gleditsch–Ward state list** (matches GED's `gwno` codes), with each state present only between its entry and exit dates. Peaceful months are zero-filled **only while the state exists** — no fake zeros for South Sudan before 2011, post-Soviet states before 1991, etc.
+- **Size (verified):** 178 states × up to 444 months = **75,703 country-months**. Clears the course minimum of 10,000 by 7.5×.
+- **Primary target (SETTLED): regression on log(1 + state-based deaths) next month.** Onsets reported as an evaluated subset.
+- **Violence type:** state-based (type 1) is the target. Non-state (2) and one-sided (3) enter as input features.
+- **Fatalities:** `best` estimate; `low`/`high` as a one-off robustness check.
+- **Multi-month events:** assigned to the month of `date_start`; report how many events span more than one month.
+- **Forecast horizons (SETTLED 2026-10-02):** 1, 3, 6 and 12 months, all reported.
+- **Onset definition (SETTLED 2026-10-02):** at risk if fewer than k=25 deaths in each of the previous m=6 months; event is >=25 deaths at the target month. Sensitivity: m=12 leaves only 14–20 onsets per fold, and one-month blips stay 60–70% under every definition. Onset results are an evaluated subset (average precision on at-risk rows), not the primary target.
+
+### Features (target: 10+)
+All features are lagged so the model only sees information available at forecast time.
+
+| Source | Features |
+|---|---|
+| GED | State-based, non-state, one-sided deaths; event counts; 3/6/12-month rolling means; months since last state-based event |
+| COW | Direct contiguity → neighbours' conflict (spatial lag) |
+| V-Dem v16 Core | `v2x_polyarchy`, `v2x_libdem`, `v2x_civlib`, `v2x_clphy`, `v2x_rule`, `v2x_corr`, `v2x_regime` (Core has no population/GDP) |
+
+- **Annual covariates are lagged one full year** when merged onto months — a year's V-Dem score is not known until the year ends. Most important for Tier 2, where a flexible model will find any leak.
+- **Coverage end dates:** COW NMC likely ends 2016; V-Dem `e_` variables may end before 2025. Anything ending before the test period is dropped or given a stated fill rule. Verify actual end years at download.
+- **COW ↔ Gleditsch–Ward crosswalk** needed (Germany, Yemen, Serbia/Yugoslavia are the usual trouble cases). Assert every merge matches the expected rows; silent mismatches drop or duplicate country-months.
+
+### How the panel feeds the reservoir (SETTLED)
+**One reservoir run per country, pooled readout.** Each country's monthly sequence drives the reservoir from a fresh state with a washout period; states are stacked across countries and one ridge readout is fit on all of them. The alternative — one run with a ~190-country input vector per month — gives only ~440 time steps, far too few for Tier 2.
+- Requires the panel stored long, sorted by country then month, with no internal gaps.
+- **Known limitation (name it in methods):** country *i*'s state never sees country *j*. Cross-country effects enter only through input features — one reason the neighbour-conflict feature matters.
+- **New states** have short series partly consumed by washout. Decide: drop below a minimum length, or keep with shorter washout. (OPEN)
+
+### Validation Design (SETTLED)
+**Rolling-origin (expanding-window) cross-validation with a locked final test set.** Random splits across 1989–2025 were considered and rejected — see reasoning in the progress log.
+
+| Fold | Train (targets in) | Validate |
+|---|---|---|
+| 1 | 1989–2005 | 2006–2008 |
+| 2 | 1989–2008 | 2009–2011 |
+| 3 | 1989–2011 | 2012–2014 |
+| 4 | 1989–2014 | 2015–2017 |
+| 5 | 1989–2017 | 2018–2020 |
+| **Test (locked)** | 1989–2020 | **2021–2025** — touched once, at the very end |
+
+Rules:
+- **Split on the target month.** A training row whose target (*t+1*) falls inside the validation window is excluded from that fold's training set.
+- **The reservoir runs continuously through history; only the readout fit is restricted.** The state entering a validation month is built from past inputs only, which is legitimate — it is information available at forecast time.
+- **All hyperparameter search happens inside folds 1–5.** Report the mean across folds plus per-fold results, so no single period dominates.
+- **Equal tuning budget for every model** — baselines, fly reservoir, and every control network get the same number of configurations. Otherwise a fly advantage could just be extra tuning.
+- **Random search as the default** (Bergstra & Bengio 2012); **grid on spectral radius × input scaling** for the heat map. **Cache reservoir states** per reservoir configuration so the ridge-penalty search is nearly free.
+- **Appendix robustness (optional):** (1) country holdout — train on ~80% of countries across all years, test on the rest (residual leak: the neighbour feature still uses held-out countries' deaths); (2) blocked time folds with ~12-month buffers.
+- **Live November 2026 check (personal, not a graded goal):** feed Candidate data through October 2026 into the final model and forecast November. Caveat when reporting: trained on final data, predicting from preliminary data. The November Candidate release (for scoring) should arrive around mid-December.
 
 ## Evaluation
 ### Metrics
 - Regression: RMSE, MAE
 - Classification: onsets are rare → precision, recall, F1, PR-AUC, not accuracy
-- **Time-series cross-validation:** train on earlier months, test on later. No random splits (leakage).
+- **Time-series cross-validation:** rolling-origin, train on earlier months, test on later. No random splits (leakage). See [[#Validation Design (SETTLED)]].
 
 ### Baselines
 - **Naive persistence** ("next month = this month"). Mandatory; very hard to beat in conflict data. Anyone who knows the literature will look for it.
@@ -237,12 +290,14 @@ Each control isolates what about the fly matters. Run every control through ever
 
 ### Robustness / "No Stone Unturned" Checklist
 Principle: **clean spine, deep appendix.** Every extra analysis rules out an alternative explanation.
-- [ ] Multiple random seeds, confidence intervals on every result
+- [x] Multiple random seeds, confidence intervals on every result (seeds 1–5 + country-cluster bootstrap, notebooks 06, 08, 09)
+- [ ] **Equivalence bounds** — largest fly advantage still consistent with the data, as a share of the history gap (09 §7)
+- [ ] **Mechanism** — linear reservoir and no-recurrence leaky banks (09 §9): is the memory the network, or just leaky integration?
 - [ ] Hyperparameter sweeps (spectral radius × input scaling heat maps)
 - [ ] **APL ablation** — remove 2 neurons, recompute SCC and performance. "How much of the fly's advantage rests on a single pair of cells?"
 - [ ] **Glutamate sign flip** — does the result survive the opposite convention?
 - [ ] **Weight scheme comparison** — raw vs log1p vs binary vs input-fraction
-- [ ] **MBON-only vs full-state readout**
+- [~] **MBON-only vs full-state readout** — done vs 1,024 random units; size-matched 96 random units in 09 §10
 - [ ] **Hemisphere replication** — fit left, test right
 - [ ] **MCNS replication** — a second connectome, different consortium, different animal. Frame as *robustness across independent reconstructions*, NOT male vs female (a sex difference in forecasting skill would more plausibly reflect reconstruction pipelines than biology).
 - [ ] Threshold sweep upward (10+); downward requires the no-threshold file
@@ -251,6 +306,30 @@ Principle: **clean spine, deep appendix.** Every extra analysis rules out an alt
 - [ ] Ethics section: early-warning systems shape aid and intervention; false positives stigmatise countries
 - [ ] Public GitHub repo: configs, fixed seeds, environment file, README
 - [ ] Polished Quarto write-up for the personal site
+
+## Results So Far: Standard ML Baselines (notebook 05, folds 1–5 only; test set untouched)
+Mean validation RMSE on log(1 + deaths), 40 random configs per family, tuned naive window.
+
+| Horizon | Naive (best window) | Ridge | Random forest | Grad. boosting |
+|---|---|---|---|---|
+| 1 | 0.5282 (w=4) | **0.5033** | 0.5048 | 0.5073 |
+| 3 | 0.5892 (w=6) | **0.5707** | 0.5783 | 0.5824 |
+| 6 | 0.6320 (w=9) | **0.6216** | 0.6322 | 0.6354 |
+| 12 | 0.7093 (w=6) | **0.6887** | 0.7012 | 0.7101 |
+
+- **Target to beat for the reservoir:** ridge's numbers above. Skill vs the tuned naive baseline is only 1.6–4.7% for ridge and 0 or negative for boosting at horizons 6 and 12.
+- Fold-to-fold SD of RMSE (0.016–0.061) is as large as the gaps between models, so differences are not established. Needs a paired fold comparison.
+- Gains come from stay-quiet and cessation rows. Onset and continuation rows are barely improved.
+- Onset average precision (at-risk rows, pooled folds): 0.095–0.158 against base rates of 0.5–1.2%, i.e. roughly 8–20x chance. Models beat naive clearly only at horizon 12.
+- Ridge wins everywhere with heavy regularisation (alpha 455–1157). Trees do not add signal over linear.
+- Naive MAE is lower than every model's (it predicts exact zero in quiet cells), so RMSE and MAE rank them differently.
+- Caveat: configs are chosen on the same folds that are reported.
+
+## Results So Far: Tier 1 Reservoirs (notebooks 07–09; folds 1–5 only)
+- **07–08, all 28 features as inputs:** every reservoir equals ridge (differences ≤ 0.001). The features already hold the history, so the readout switches the states off. Uninformative about wiring.
+- **09, 12 history-free inputs:** reservoirs recover 89–98% of the gap between ridge on current values (A) and ridge on all 28 features (B). The fly ties every control; random (ER) is nominally best. Any fly advantage is bounded at about 6% of the history gap at most, and under 2% at most horizons.
+- Best `input_scale` sits at the bottom of its range → reservoirs prefer the near-linear regime, which likely explains the tie. Tested in 09 §9.
+- Details and tables: [[ML FP Progress Log]].
 
 ## RL Agent Thread
 Keep the follow-on in mind throughout so the class project builds toward it.
@@ -273,7 +352,7 @@ Keep the follow-on in mind throughout so the class project builds toward it.
 ## Revised Timeline
 **Deviation from the original plan:** connectome was loaded *before* the conflict data, to verify feasibility before investing in data acquisition. Justified — the mushroom body could have turned out to be feedforward and unusable, which would have invalidated the whole approach.
 
-**The cost:** Check-in 2 is Data Collection, and the conflict data is not started. The persistence baseline — the number everything else is compared against — does not exist yet. This is now the critical path.
+**Status (2026-10-02):** the conflict pipeline, baselines and Tier 1 (full-feature and history-free experiments, with controls) are done. Tier 1 is a tightly bounded null: the fly ties weight-shuffled, rewired and random networks. Next: the mechanism checks in notebook 09, then Tier 2.
 
 | Week | Syllabus | Project work | RL thread |
 |---|---|---|---|
@@ -303,7 +382,7 @@ fly-conflict/
 │   ├── env/            # gym-style environment (Tier 3 + RL follow-on)
 │   └── eval/           # metrics, time-series CV, baselines
 ├── configs/            # hyperparameters, seeds
-├── notebooks/          # exploration only; results come from src/
+├── notebooks/          # runnable pipeline, numbered in run order; import functions from src/
 └── README.md
 ```
 
@@ -311,9 +390,11 @@ fly-conflict/
 If the connectome work stalls, **random reservoir vs baselines on conflict forecasting** is still a complete project. Tiers 1 + 2 + controls is the real deliverable.
 
 ## Open Decisions
-- Regression (fatalities) vs classification (onset) as primary target
-- Weight scaling scheme (lean: fraction of postsynaptic input)
-- Which neurons receive input, once the PN layer is identified
+- ~~Regression (fatalities) vs classification (onset) as primary target~~ → **regression primary** (settled 2026-10-01)
+- ~~Monthly onset definition~~ → k=25 after m=6 quiet months (settled 2026-10-02)
+- ~~Minimum series length / washout for new states~~ → each state's reservoir starts from zero at its first month; forecast origins need 13+ months of history (burn-in 12), so no extra washout (settled 2026-10-02)
+- ~~Weight scaling scheme~~ → fraction of postsynaptic input; log1p, binary and raw are robustness variants (`weight_matrix(scheme=...)`)
+- ~~Which neurons receive input~~ → the 285 olfactory projection neurons (class ALPN with at least one connection onto a Kenyon cell); found empirically in notebook 07. Network = 5,606 MB neurons + 285 PNs = 5,891
 - Whether to add the central complex (see below)
 - Covariates beyond conflict history
 - **Email to Dr. Adler re: social-phenomenon strictness — still outstanding**
@@ -347,12 +428,23 @@ Not needed for recurrence (the MB has plenty), but worth considering for a secon
 - Sutton & Barto, *Reinforcement Learning: An Introduction* (free online)
 - Fearon (1995), *Rationalist Explanations for War*
 
+## Reservoir Build (BUILT 2026-10-02, quick-tested; full runs pending)
+- `src/networks/connectome.py` loader (MB + ALPN subgraph, signs, weight schemes), `controls.py` (weight-shuffled, degree-preserving rewired, Erdős–Rényi), `reservoir.py` (leaky tanh reservoir, all countries run in parallel).
+- `src/models/readout.py`: ridge for 12 penalties and all folds from running Gram matrices. Verified against a float64 solve (1e-6) and against notebook 05's ridge (0.5032 vs 0.5033 at h=1).
+- `src/models/reservoir_search.py`: `ReservoirLab`, random search over (rho 0.3–1.4, input scale 0.02–2, leak 0.1–1, state weight 0.02–1), 40 configs, same draws for every network. Readout = 1,024 random units (same for all networks) or the 96 MBONs, plus the 28 raw features.
+- Notebooks: **06** paired comparison of baselines (country-cluster bootstrap), **07** fly reservoir, **08** controls, seeds, final comparison, **09** memory test (history-free inputs).
+- **Result of 07–08 (full features): null.** Fly, shuffled, rewired, random and ridge all tie (RMSE within 0.001); the readout learned to ignore the states because the 28 features already hold lags and rolling means. This design cannot test the fly's wiring. Reported as one of two experiments.
+- **09 memory test:** inputs are the 12 current-month values only (no lags, means, streaks); reference A = ridge on those 12 (no memory), reference B = ridge on all 28 (explicit history). Metric: share of the A-to-B gap each network recovers. This is the experiment that can show a fly advantage.
+- Known behaviour: configurations with rho above about 1 do not forget their starting state (chaotic regime); notebook 07 flags the best configurations that do this.
+- Design choices to defend: states plus raw features in the readout (reservoir can only add to ridge); 1,024-unit random readout for tuning (full 5,891-unit readout is a later robustness check); rho, leak and input scale are tuned, not properties of the fly.
+
 ## Next Steps
-- [ ] Run the upstream query to identify the PN input layer
-- [ ] Add PNs to the subgraph; re-verify SCC
-- [ ] Drop the 71 neurons outside the main SCC
-- [ ] Fix DAN selection to cell-type based (331, not 281)
-- [ ] Decide weight scaling scheme
-- [ ] Cache `edges` and `meta` to parquet
-- [ ] **Start UCDP data pipeline — this is the critical path**
-- [ ] Email Dr. Adler
+- [x] Run 06, 07, 08 (done 2026-10-02; null, see progress log)
+- [ ] Run 09 (quick test first); decide from the memory-recovered table and paired intervals whether the fly beats the controls
+- [ ] Robustness extensions on `ReservoirLab`: APL ablation, glutamate sign flip, weight schemes (log1p, binary), full 5,891-unit readout, hemisphere replication, multiple graph seeds
+- [ ] MLP baseline; ViEWS benchmark
+- [ ] Tier 2 (train weights on existing connections) once Tier 1 results are reviewed
+- [ ] Locked-test evaluation, once, at the very end (with and without Nov–Dec 2025)
+- [ ] Live November 2026 check using UCDP Candidate data (personal)
+- [ ] Error analysis, PCA on reservoir states, ethics section
+- [ ] Email Dr. Adler (outstanding)

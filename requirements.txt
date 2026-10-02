@@ -1,0 +1,8 @@
+# Python 3.14
+pandas>=3.0
+pyarrow>=25.0
+requests>=2.32
+matplotlib>=3.10
+scipy>=1.16
+scikit-learn>=1.8
+ipykernel  # Jupyter kernel for VS Code notebooks

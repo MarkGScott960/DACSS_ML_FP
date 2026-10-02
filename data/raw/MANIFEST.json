@@ -1,0 +1,51 @@
+{
+  "ged261-csv.zip": {
+    "url": "https://ucdp.uu.se/downloads/ged/ged261-csv.zip",
+    "dataset": "UCDP Georeferenced Event Dataset (GED) Global",
+    "version": "26.1",
+    "sha256": "8c941d84954e555ee2e54f40fa04d9203bf1e2f962203d0a9930966c4947c667",
+    "bytes": 39122522,
+    "downloaded_utc": "2026-10-02T03:11:06+00:00"
+  },
+  "ged261.pdf": {
+    "url": "https://ucdp.uu.se/downloads/ged/ged261.pdf",
+    "dataset": "UCDP GED codebook",
+    "version": "26.1",
+    "sha256": "f767380ebbf365aec7586f98b6d100cafb69fb54010a908604d53bd9ad655972",
+    "bytes": 917038,
+    "downloaded_utc": "2026-10-02T03:11:08+00:00"
+  },
+  "gw_iisystem.dat": {
+    "url": "http://ksgleditsch.com/data/iisystem.dat",
+    "dataset": "Gleditsch-Ward list of independent states",
+    "version": "as published",
+    "sha256": "c9e559020492c246d2d7b60ac5b6fbd75ba1e681136be2212ed1444b0a28e067",
+    "bytes": 9093,
+    "downloaded_utc": "2026-10-02T03:11:08+00:00"
+  },
+  "gw_microstatessystem.dat": {
+    "url": "http://ksgleditsch.com/data/microstatessystem.dat",
+    "dataset": "Gleditsch-Ward list of microstates",
+    "version": "as published",
+    "sha256": "5a220717ca4fa27b69c4ef0670f9897438999ef5a08ee5e18dda84574e04b629",
+    "bytes": 1015,
+    "downloaded_utc": "2026-10-02T03:11:09+00:00"
+  },
+  "DirectContiguity320.zip": {
+    "url": "https://correlatesofwar.org/wp-content/uploads/DirectContiguity320.zip",
+    "dataset": "COW Direct Contiguity (1816-2016)",
+    "version": "3.2",
+    "sha256": "f1be081934f353f395bb873093b695ea01d7dfcb48e89146bd984c45342ba17a",
+    "bytes": 636368,
+    "downloaded_utc": "2026-10-02T03:32:34+00:00"
+  },
+  "V-Dem-CY-Core-v16.csv": {
+    "url": "https://www.v-dem.net/data/the-v-dem-dataset/country-year-v-dem-core-v16/",
+    "dataset": "V-Dem Country-Year Core (CC BY-SA 4.0)",
+    "version": "16",
+    "sha256": "9be120ba6cb42cfa65a774215d2861910ed2477493ed3879aae9cac0ec23bf3f",
+    "bytes": 212328691,
+    "registered_utc": "2026-10-02T03:32:35+00:00",
+    "acquired": "manual download"
+  }
+}

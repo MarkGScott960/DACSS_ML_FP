@@ -1,0 +1,25 @@
+horizon,A,B,diff,lo,hi,p_a_better,significant
+1,fly,"A: ridge, current values",-0.06253,-0.07712,-0.04843,1.0,True
+1,fly,"B: ridge, full features",0.00186,-0.00126,0.00574,0.1395,False
+1,"B: ridge, full features","A: ridge, current values",-0.06439,-0.08063,-0.04903,1.0,True
+1,fly,weight-shuffled,-0.00035,-0.00259,0.00267,0.625,False
+1,fly,degree-preserving rewired,-0.00136,-0.00413,0.00131,0.837,False
+1,fly,random (Erdős–Rényi),0.00054,-0.00095,0.00215,0.245,False
+3,fly,"A: ridge, current values",-0.07418,-0.09782,-0.05022,1.0,True
+3,fly,"B: ridge, full features",0.00483,-0.00121,0.01284,0.076,False
+3,"B: ridge, full features","A: ridge, current values",-0.07901,-0.10379,-0.05596,1.0,True
+3,fly,weight-shuffled,0.00073,-0.00081,0.00304,0.2395,False
+3,fly,degree-preserving rewired,0.00054,-0.00044,0.00171,0.153,False
+3,fly,random (Erdős–Rényi),0.00165,0.00044,0.00337,0.0005,True
+6,fly,"A: ridge, current values",-0.07975,-0.11046,-0.04898,1.0,True
+6,fly,"B: ridge, full features",0.0053,-0.00444,0.01745,0.171,False
+6,"B: ridge, full features","A: ridge, current values",-0.08504,-0.12077,-0.05588,1.0,True
+6,fly,weight-shuffled,0.00107,-0.00141,0.00462,0.273,False
+6,fly,degree-preserving rewired,0.00063,-0.00136,0.00307,0.305,False
+6,fly,random (Erdős–Rényi),0.00194,-0.00012,0.00485,0.04,False
+12,fly,"A: ridge, current values",-0.06058,-0.09035,-0.02989,1.0,True
+12,fly,"B: ridge, full features",0.00741,-0.00717,0.02554,0.1985,False
+12,"B: ridge, full features","A: ridge, current values",-0.06799,-0.10688,-0.03776,1.0,True
+12,fly,weight-shuffled,0.00034,-0.00299,0.00389,0.4135,False
+12,fly,degree-preserving rewired,0.00023,-0.00293,0.00323,0.4195,False
+12,fly,random (Erdős–Rényi),0.00247,-0.00207,0.00774,0.1645,False

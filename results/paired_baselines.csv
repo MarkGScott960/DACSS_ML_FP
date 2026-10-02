@@ -1,0 +1,21 @@
+horizon,A,B,diff,lo,hi,p_a_better,significant
+1,ridge,naive (best window),-0.02504,-0.03401,-0.01535,1.0,True
+1,random forest,naive (best window),-0.02344,-0.0339,-0.01031,0.9995,True
+1,gradient boosting,naive (best window),-0.02108,-0.03491,-0.00144,0.983,True
+1,random forest,ridge,0.00159,-0.00345,0.00813,0.305,False
+1,gradient boosting,ridge,0.00395,-0.00437,0.01781,0.304,False
+3,ridge,naive (best window),-0.01848,-0.03118,-0.00554,0.9985,True
+3,random forest,naive (best window),-0.01065,-0.0307,0.0155,0.8135,False
+3,gradient boosting,naive (best window),-0.00659,-0.028,0.02091,0.7025,False
+3,random forest,ridge,0.00783,-0.00445,0.02657,0.183,False
+3,gradient boosting,ridge,0.01189,-0.00279,0.03287,0.0815,False
+6,ridge,naive (best window),-0.01045,-0.02288,0.00064,0.9645,False
+6,random forest,naive (best window),0.00076,-0.02259,0.03095,0.4965,False
+6,gradient boosting,naive (best window),0.00402,-0.0231,0.03878,0.4175,False
+6,random forest,ridge,0.01121,-0.00769,0.03744,0.1805,False
+6,gradient boosting,ridge,0.01447,-0.0074,0.0453,0.1555,False
+12,ridge,naive (best window),-0.02029,-0.04003,-0.00029,0.977,True
+12,random forest,naive (best window),-0.00677,-0.03882,0.03381,0.648,False
+12,gradient boosting,naive (best window),0.00166,-0.03718,0.04744,0.473,False
+12,random forest,ridge,0.01352,-0.00778,0.03834,0.1265,False
+12,gradient boosting,ridge,0.02195,-0.00416,0.05333,0.0625,False
