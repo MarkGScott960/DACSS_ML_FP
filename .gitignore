@@ -21,3 +21,8 @@ desktop.ini
 
 # smoke-test outputs
 results/*_quicktest*
+
+# tuning logs: large, regenerable caches (the summary CSVs stay tracked)
+results/memory_*log.csv
+results/reservoir_log.csv
+results/*.fingerprint.json
