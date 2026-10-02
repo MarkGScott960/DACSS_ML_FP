@@ -1,0 +1,13 @@
+horizon,control,fly - control,lo,hi,largest plausible fly advantage,as share of A-B gap
+1,weight-shuffled,-0.00035,-0.00259,0.00267,0.00259,0.04015
+1,degree-preserving rewired,-0.00136,-0.00413,0.00131,0.00413,0.06408
+1,random (Erdős–Rényi),0.00054,-0.00095,0.00215,0.00095,0.01481
+3,weight-shuffled,0.00073,-0.00081,0.00304,0.00081,0.01028
+3,degree-preserving rewired,0.00054,-0.00044,0.00171,0.00044,0.00555
+3,random (Erdős–Rényi),0.00165,0.00044,0.00337,0.0,0.0
+6,weight-shuffled,0.00107,-0.00141,0.00462,0.00141,0.01656
+6,degree-preserving rewired,0.00063,-0.00136,0.00307,0.00136,0.01598
+6,random (Erdős–Rényi),0.00194,-0.00012,0.00485,0.00012,0.00142
+12,weight-shuffled,0.00034,-0.00299,0.00389,0.00299,0.04401
+12,degree-preserving rewired,0.00023,-0.00293,0.00323,0.00293,0.04305
+12,random (Erdős–Rényi),0.00247,-0.00207,0.00774,0.00207,0.03038
