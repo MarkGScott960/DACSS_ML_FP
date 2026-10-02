@@ -1,0 +1,13 @@
+horizon,comparison,diff,lo,hi,largest plausible fly advantage,as share of A-B gap
+1,fly (linear) vs random (linear),2e-05,-0.00084,0.00084,0.00084,0.01297
+1,fly (tanh) vs bank_multi (no recurrence),0.00284,-8e-05,0.00648,8e-05,0.00127
+1,fly (linear) vs bank_multi (no recurrence),0.00041,-0.00051,0.00126,0.00051,0.00794
+3,fly (linear) vs random (linear),0.00075,-0.00028,0.00175,0.00028,0.00358
+3,fly (tanh) vs bank_multi (no recurrence),0.00188,-0.00044,0.00445,0.00044,0.00562
+3,fly (linear) vs bank_multi (no recurrence),-0.00065,-0.00381,0.00165,0.00381,0.04826
+6,fly (linear) vs random (linear),0.00121,-0.00044,0.0029,0.00044,0.00523
+6,fly (tanh) vs bank_multi (no recurrence),0.00272,-9e-05,0.00595,9e-05,0.00105
+6,fly (linear) vs bank_multi (no recurrence),-0.00033,-0.00352,0.00184,0.00352,0.04135
+12,fly (linear) vs random (linear),0.00102,-0.00072,0.003,0.00072,0.01062
+12,fly (tanh) vs bank_multi (no recurrence),0.00402,-0.00413,0.01427,0.00413,0.06068
+12,fly (linear) vs bank_multi (no recurrence),0.00055,-0.00605,0.00695,0.00605,0.08899

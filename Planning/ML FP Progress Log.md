@@ -437,7 +437,7 @@ Smaller points, disclosed rather than fixed:
 - **Onset AP (§8):** only h=12 vs B is significant: fly +0.032 [0.005, 0.054], ER +0.038 [0.003, 0.062]. Driven by folds 1, 3 and 4 (e.g. fold 3: fly 0.165 vs B 0.123); folds 2 and 5 flat. Fly vs A (no memory) not significant. A reservoir effect, not a fly effect; 2 of 16 correlated tests. Exploratory only.
 - **Seeds:** mechanism seeds (3 new): sd 0.0001–0.0005.
 - **Edge-of-range:** best ridge penalty at the bottom of the grid for all linear and bank models at h=1 (and shuffled/rewired tanh at h=1; effect probably negligible, not tested); bank_multi's slowest leak is 0.012 at h=12 against a lower bound of 0.01 and RMSE still improves with slower leaks (Spearman +0.65).
-- **Exploratory baseline with no reservoir** (run outside the repo, now built into §9c): ridge on exponential moving averages of the 12 inputs, 3 leaks (0.5, 0.15, 0.04) → 0.5056 / 0.5733 / 0.6239 / 0.6916; 6 leaks → 0.5059 / 0.5737 / 0.6242 / 0.6917. Within about 0.0006 of the linear reservoirs at h = 3, 6, 12; 0.003 behind at h=1 (fewer time scales). Only the ridge penalty is chosen (12 values), so its budget is smaller than the reservoirs'. Confirm with the §9c output once notebook 09 is re-run.
+- **Exploratory baseline with no reservoir** (run outside the repo, now built into §9c): ridge on exponential moving averages of the 12 inputs, 3 leaks (0.5, 0.15, 0.04) → 0.5056 / 0.5733 / 0.6239 / 0.6916; 6 leaks → 0.5059 / 0.5737 / 0.6242 / 0.6917. Within about 0.0006 of the linear reservoirs at h = 3, 6, 12; 0.003 behind at h=1 (fewer time scales). Only the ridge penalty is chosen (12 values), so its budget is smaller than the reservoirs'. **Confirmed 2026-10-02:** notebook 09 §9c reproduces these numbers exactly (see the entry below).
 
 ### Interpretation
 1. The reservoir mechanism works, but the memory it supplies is multi-time-scale leaky averaging of the inputs. A bank of independent leaky units supplies it just as well, and so does a plain set of moving averages. B's lags and rolling means already approximate it, so no reservoir beats B.
@@ -457,16 +457,36 @@ Smaller points, disclosed rather than fixed:
 
 ---
 
+## Documentation consolidation (2026-10-02, night)
+- Wrote `Planning/Tier 1 Report.md`: one self-contained account of Tier 1 (data, validation, baselines, network, reservoir, Experiments 1 and 2, mechanism checks, MBON readout, onset AP, interpretation, limitations, reproducibility, decision register, glossary).
+- **Structure decision:** Guide = plan and settled decisions; Log = chronology; one consolidated Report per tier (Tier 2 Report is created when Tier 2 is built); README = front page. Added a "Documentation map" to the Guide.
+- Guide fixes: multi-month events are spread by day (not assigned to `date_start`); features table now lists the 28 built features (event counts were never built); status header updated.
+- EMA-baseline numbers in Report §9.4 were pending the notebook 09 re-run; resolved in the entry below.
+
+## Tier 2 feasibility check (2026-10-02, night)
+Script: `scripts/tier2_feasibility.py` (random inputs, no targets; speed and memory only).
+- **PyTorch:** installs; a `cp314` Windows wheel exists for torch 2.14.1, so Python 3.14 on the laptop is fine.
+- **Graph:** 5,891 nodes, **92,642 trainable (signal-carrying) connections**, 285 input nodes, window 36 months, batch 178 countries, 1,024-unit readout.
+- **Speed (2 CPU threads, tanh, loss on the last month):** sparse-COO matmul forward 0.33 s + backward 3.5 s = **~3.9 s per 36-month window of all 178 countries**, 1.3 GB peak. A gather/scatter implementation is slower (6.7 s) and needs 5.9 GB, so use the sparse matmul. Gradients are finite.
+- **Cost model:** one pass over the 444 months is about 12 windows, so roughly **45 s per epoch** on 2 threads (a laptop with more cores should be faster). 5 folds x 5 architectures x 5 seeds x ~30 epochs is about 40 hours on 2 threads, so Tier 2a needs a reduced design (see decision below).
+
+## Notebook 09 re-run and Tier 1 sign-off (2026-10-02, evening)
+- First run of §9c failed with `AttributeError: 'ReservoirLab' has no attribute 'evaluate_ema'`. Cause: the Jupyter kernel had imported `reservoir_search.py` before the edit; fixed by restarting the kernel and running all (the file on disk was correct).
+- **EMA baseline confirmed** (`memory_ema_rmse.csv`): EMA x3 0.5056 / 0.5733 / 0.6239 / 0.6916; EMA x6 0.5059 / 0.5737 / 0.6242 / 0.6917, identical to the exploratory run. Paired tests (`paired_ema.csv`): EMA x3 vs fly (linear) +0.0029 / +0.0004 / +0.0002 / −0.0009 and vs ER (linear) +0.0029 / +0.0011 / +0.0014 / +0.0001, none significant. Only significant EMA comparison: vs `bank_multi` at h=1 (+0.0033, CI 0.0002 to 0.0088).
+- **Mechanism equivalence bounds** (`memory_bounds_mechanism.csv`, share of the A–B gap, h = 1/3/6/12): fly (linear) vs ER (linear) 1.3 / 0.4 / 0.5 / 1.1%; fly (tanh) vs `bank_multi` 0.1 / 0.6 / 0.1 / 6.1%; fly (linear) vs `bank_multi` 0.8 / 4.8 / 4.1 / 8.9%. The earlier "1.2%" figure for linear networks is corrected to 1.3%, and applies against random networks; the unconnected bank's bound is wider.
+- MBON vs random-96 and onset AP outputs unchanged (MBONs rank 6 of 6 at every horizon).
+- Tier 1 Report and README updated; **Tier 1 declared final.** Tier 2 Report started (design, feasibility, hardware: i9-9900K, 31.9 GB, RTX 4070 12 GB, CUDA 12.6 driver, torch 2.14.1+cu126).
+
 ## Current State
 **Tier 1 is complete.** Panel, features (leakage-audited), rolling-origin folds with a locked test set, tuned baselines, paired comparisons, the fly reservoir with three controls (full features: states switched off; history-free: reservoirs recover 89–102% of the history gap), the mechanism checks (linear, no-recurrence banks, size-matched readout) and the no-reservoir baseline.
 **Result:** a tightly bounded null on wiring (a fly advantage above 1–6% of the history gap is ruled out), explained by the mechanism: the reservoirs supply leaky averaging, which independent leaky units and plain moving averages supply equally.
-**Pending:** run notebook 09 once more to execute §9c (a few minutes; every other cell reuses its log).
+**Tier 1 final.**
 **Not started:** Tier 2 (trained weights, diagnostic task, structural plasticity), MLP baseline, robustness checks (APL ablation and glutamate flip deprioritised while the fly ties random networks), locked-test evaluation.
 
 ## Immediate Next Steps
-1. Re-run notebook 09 (executes §9c); commit; push.
+1. Tier 1 final commit and push (Mark).
 2. Optional one-off: extend the ridge penalty grid two decades lower for the six best linear and bank configurations at h=1 and confirm nothing moves.
-3. Tier 2 feasibility: install PyTorch under Python 3.14 and time sparse backpropagation through 36-month windows for 178 countries with the 97k existing connections.
+3. Tier 2 feasibility: DONE (see above). Next: agree the reduced Tier 2a design with Mark (folds, horizons, seeds, epochs), then build it.
 4. Build Tier 2a (see the guide): train existing weights from fly, shuffled, rewired and ER starts, plus a GRU of similar size, with an inner validation window for early stopping and 5 seeds.
 5. Tier 2b: nonlinear memory benchmark (NARMA-10, delayed parity) for frozen and trained fly vs controls.
 6. Tier 2c (extension): learnable connection gates and budgeted rewiring.

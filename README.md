@@ -4,7 +4,8 @@ DACSS 756 (Machine Learning) final project. Forecasts monthly state-based confli
 
 ## Status
 - Done: data download, cleaned country-month panel, feature set, rolling-origin validation, tuned baselines (naive, ridge, random forest, gradient boosting), paired comparisons, the fly reservoir and three control networks with full features (07–08), a history-free memory test with mechanism checks (09).
-- **Tier 1 result:** a tightly bounded null. The fly ties its control networks and a bank of leaky units with no connections; the reservoirs supply leaky averaging of the inputs, which hand-built lags already approximate.
+- **Tier 1 result** (full account: `Planning/Tier 1 Report.md`): a tightly bounded null. The fly ties its control networks and a bank of leaky units with no connections; the reservoirs supply leaky averaging of the inputs, which hand-built lags already approximate.
+- Tier 1 is final (2026-10-02).
 - Next: Tier 2 (training the connectome's weights, with trained controls and a diagnostic task), MLP baseline, one-time evaluation on the locked test set (2021–2025).
 
 ## Design in brief
@@ -38,7 +39,7 @@ Gains over the tuned naive baseline are small (under 5%); ridge's are reliable a
 | random ER (linear) | 0.503 | 0.572 | 0.623 | 0.692 |
 | leaky-unit bank, no connections | 0.502 | 0.574 | 0.624 | 0.692 |
 
-Every reservoir closes 89–102% of the gap to the 28-feature ridge. The fly ties every control; a fly advantage larger than about 6% of that gap (tanh) or 1.2% (linear) is ruled out. Linear reservoirs are at least as good as tanh, a bank of independent leaky units with no connections does as well, and the 96 mushroom-body output neurons read out worse than 96 random units. Details are in `Planning/ML FP Progress Log.md`.
+Every reservoir closes 89–102% of the gap to the 28-feature ridge. The fly ties every control; a fly advantage larger than about 6% of that gap (tanh) or 1.3% (linear, against random networks) is ruled out. Linear reservoirs are at least as good as tanh, a bank of independent leaky units with no connections does as well, plain exponential moving averages of the inputs (no reservoir at all) do as well (within 0.003 at h=1 and 0.001 at h = 3, 6, 12), and the 96 mushroom-body output neurons read out worse than 96 random units. Details are in `Planning/Tier 1 Report.md`.
 
 ## The reservoir model
 A leaky echo-state network whose wiring is the fly's mushroom body (5,606 neurons) plus the 285 olfactory projection neurons that feed it, from FlyWire. Country-month features drive the projection neurons; each country is run separately and one ridge readout is fit on all of them. With all 28 features the reservoir adds nothing over ridge (the features already contain the history), so notebook 09 repeats the comparison with history-free inputs, where the reservoir's dynamics must supply the memory, and then asks where that memory comes from (linear reservoirs, banks of leaky units with no connections, moving averages with no units at all). Control networks (weight-shuffled, degree-preserving rewired, random) are tuned with identical budgets so any fly advantage can be attributed to specific wiring. Spectral radius, leak and input scale are tuned hyperparameters, not properties of the fly.
@@ -47,7 +48,7 @@ A leaky echo-state network whose wiring is the fly's mushroom body (5,606 neuron
 - `notebooks/` numbered in run order: `01_download`, `02_clean_join_describe`, `03_folds_and_baselines`, `04_features`, `05_models_random_search`, `06_paired_comparison`, `07_fly_reservoir`, `08_controls_and_comparison`, `09_memory_test`
 - `src/` reusable code: `data/` (download, panel), `features/`, `eval/` (splits, metrics, paired bootstrap), `models/` (readout, reservoir search), `networks/` (connectome, controls, reservoir)
 - `results/` leaderboard, onset scores, paired comparisons, best configs. The large tuning logs (`memory_*log.csv`, `reservoir_log.csv`) are regenerable caches and are not committed
-- `Planning/` project guide, progress log and connectome notes
+- `Planning/` project guide (the plan), progress log (chronology), `Tier 1 Report.md` (everything about Tier 1 in one place; a `Tier 2 Report.md` follows when Tier 2 is built) and connectome notes
 - `Flywire_FAFBv783/` connectome files
 
 ## Running it

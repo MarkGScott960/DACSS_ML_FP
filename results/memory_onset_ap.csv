@@ -1,6 +1,6 @@
 horizon,A,B,events,diff,lo,hi,p_a_better,significant
 1,fly,"B: ridge, full features",128,0.00413,-0.00674,0.00923,0.7345,False
-1,random (Erdős–Rényi),"B: ridge, full features",128,-0.00325,-0.0206,0.00751,0.2075,False
+1,random (Erdős–Rényi),"B: ridge, full features",128,-0.00325,-0.0206,0.0075,0.2075,False
 1,"A: ridge, current values","B: ridge, full features",128,-0.01011,-0.04794,0.01191,0.1675,False
 1,fly,"A: ridge, current values",128,0.01424,-0.00771,0.04684,0.8955,False
 3,fly,"B: ridge, full features",177,0.01418,-0.00781,0.02531,0.8555,False

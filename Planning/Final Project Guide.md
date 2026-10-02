@@ -6,7 +6,18 @@ aliases:
 # Final Project Guide: Fly Connectome Conflict Forecasting
 Working guide for the DACSS 756 final project and the RL bargaining follow-on. See [[Final Project]] for the original sketches (Idea 1: fly trades stocks, Idea 2: fly forecasts conflict). See [[ML FP Progress Log]] for session-by-session diagnostics and verification results.
 
-**Status as of 2026-10-01:** connectome loaded and verified; mushroom body confirmed as a viable reservoir; conflict data not yet acquired.
+**Status as of 2026-10-02:** Tier 1 (frozen reservoir, trained readout) is complete and written up in [[Tier 1 Report]]; Tier 2 (trained connectome) is next, design in the Tier 2 section. The locked 2021–2025 test set has not been scored.
+
+## Documentation Map
+| Document | Role | Changes |
+|---|---|---|
+| `Final Project Guide.md` (this file) | The plan: question, design, settled decisions, open items | When a decision is made or changed |
+| `ML FP Progress Log.md` | Chronology: what was done each session, diagnostics, verification | Appended every session |
+| `Tier 1 Report.md` | One consolidated, self-contained account of Tier 1: data, methods, every result, interpretation, limitations, reproducibility | Final as of 2026-10-02 |
+| `Tier 2 Report.md` | Same structure for Tier 2 | Created when Tier 2 is built |
+| `README.md` | Front page of the repository: status, headline results, how to run | Whenever status changes |
+
+Rule of thumb: a *decision* lives in the Guide, a *date* lives in the Log, a *result with its method* lives in the tier's Report. Reports are written to be read cold, e.g. for the final write-up.
 
 ## The Project in One Paragraph
 Use the fly [[Connectome]] (FlyWire FAFB v783) as a recurrent neural network to forecast armed conflict at the country-month level. Test whether biological wiring gives a useful inductive bias compared with random networks and conventional models, under three increasingly flexible learning regimes.
@@ -219,18 +230,18 @@ Settled 2026-10-01. Full reasoning in [[ML FP Progress Log#2026-10-01 — Data c
 - **Primary target (SETTLED): regression on log(1 + state-based deaths) next month.** Onsets reported as an evaluated subset.
 - **Violence type:** state-based (type 1) is the target. Non-state (2) and one-sided (3) enter as input features.
 - **Fatalities:** `best` estimate; `low`/`high` as a one-off robustness check.
-- **Multi-month events:** assigned to the month of `date_start`; report how many events span more than one month.
+- **Multi-month events (SETTLED):** spread evenly by day across the months they cover (not assigned to `date_start`). They are 1.7% of events but 24% of deaths; year-long events become flat plateaus, which flatters persistence baselines (see [[Tier 1 Report]] §3.2).
 - **Forecast horizons (SETTLED 2026-10-02):** 1, 3, 6 and 12 months, all reported.
 - **Onset definition (SETTLED 2026-10-02):** at risk if fewer than k=25 deaths in each of the previous m=6 months; event is >=25 deaths at the target month. Sensitivity: m=12 leaves only 14–20 onsets per fold, and one-month blips stay 60–70% under every definition. Onset results are an evaluated subset (average precision on at-risk rows), not the primary target.
 
-### Features (target: 10+)
-All features are lagged so the model only sees information available at forecast time.
+### Features (BUILT: 28)
+All features are computed from rows at or before the origin month, so the model only sees information available at forecast time. Full list and leakage audit: [[Tier 1 Report]] §3.4.
 
 | Source | Features |
 |---|---|
-| GED | State-based, non-state, one-sided deaths; event counts; 3/6/12-month rolling means; months since last state-based event |
-| COW | Direct contiguity → neighbours' conflict (spatial lag) |
-| V-Dem v16 Core | `v2x_polyarchy`, `v2x_libdem`, `v2x_civlib`, `v2x_clphy`, `v2x_rule`, `v2x_corr`, `v2x_regime` (Core has no population/GDP) |
+| GED (18) | log deaths this month for state-based, non-state, one-sided; state-based lags 1/2/3/6/12; rolling means over 3/6/12 months; 12-month max; trend (mean3 − mean12); non-state and one-sided 3-month means; log months since last conflict; conflict streak; never-conflict flag. (Event counts were not built.) |
+| COW (3) | Direct contiguity → neighbours' deaths this month and 3-month mean; number of land neighbours |
+| V-Dem v16 Core (7) | `v2x_polyarchy`, `v2x_libdem`, `v2x_civlib`, `v2x_clphy`, `v2x_rule`, `v2x_corr`, `v2x_regime` (Core has no population/GDP) |
 
 - **Annual covariates are lagged one full year** when merged onto months — a year's V-Dem score is not known until the year ends. Most important for Tier 2, where a flexible model will find any leak.
 - **Coverage end dates:** COW NMC likely ends 2016; V-Dem `e_` variables may end before 2025. Anything ending before the test period is dropped or given a stated fill rule. Verify actual end years at download.
@@ -341,7 +352,7 @@ Mean validation RMSE on log(1 + deaths), 40 random configs per family, tuned nai
 - **Implication for Tier 2:** RF/GB did not beat ridge, tanh did not beat linear, and no reservoir beats B, so the signal looks close to linear in a multi-scale history. Training weights on the conflict target may tie ridge too; Tier 2b exists to tell "no nonlinear signal" from "cannot learn".
 - Details: [[ML FP Progress Log]].
 
-## Tier 2 Design (DRAFT, 2026-10-02)
+## Tier 2 Design (DRAFT, scope agreed 2026-10-02)
 **What Tier 2 is.** Tier 1 froze every connection and trained only the readout. Tier 2 lets the connectome itself change with training. The question: **can the fly's wiring learn, and does it learn better than a random network given the same training?**
 
 **2a. Trained weights on the conflict target (the required deliverable; this is the Tier 2 in the tier table).**
@@ -355,7 +366,9 @@ Mean validation RMSE on log(1 + deaths), 40 random configs per family, tuned nai
 
 **2c. Structural plasticity (extension; changing *which* neurons connect).** Beyond the tier table's Tier 2, which keeps connections fixed. (i) *Pruning:* a learnable gate on each of the 97k connections with a sparsity penalty: which connections does the task need? (ii) *Growth:* a fixed connection budget with periodic drop-and-grow (e.g. RigL-style: remove the weakest, add the absent pairs with the largest gradient). Compare the learned wiring with the fly's (overlap of edges), and fly-start vs ER-start. Cut if time is short.
 
-**Feasibility checks before building:** PyTorch install under Python 3.14; time one sparse BPTT epoch (178 × 5,891 states, 36-month windows, 97k non-zero weights; memory about 150 MB per layer per window, which should fit on a laptop CPU).
+**Feasibility (DONE 2026-10-02, `scripts/tier2_feasibility.py`).** PyTorch 2.14 has a Python 3.14 Windows wheel. Sparse-COO matmul BPTT through a 36-month window of all 178 countries (92,642 trainable connections, 1,024-unit readout) takes about 3.9 s on 2 threads and 1.3 GB (gather/scatter is slower and uses 5.9 GB), so one pass over 444 months is about 45 s on 2 threads. Mark's machine (confirmed 2026-10-02): Intel i9-9900K (8 cores / 16 threads), 31.9 GB RAM, NVIDIA RTX 4070 with 12 GB VRAM, driver 560.94 (CUDA 12.6), so PyTorch needs the `cu126` build (`torch 2.14.1+cu126` has a cp314 Windows wheel). A masked dense matmul on the GPU is the likely fastest path; `scripts/tier2_feasibility.py cuda` benchmarks coo / dense / gather. CPU baseline in the container (2 threads): coo 3.7 s, dense 7.1 s, gather 6.8 s per window.
+
+**Scope decisions (Mark, 2026-10-02):** overnight budget (10–20 h) is acceptable; all four horizons (one multi-output head); inputs: the 12 history-free features first (the main test, because memory must come from the network), then the 28 features as a secondary check. Open: how the budget is split between hyperparameter tuning (one fold) and the final multi-fold, multi-seed runs.
 
 **Leakage rules:** every training row's target month ≤ the fold's train end; inner validation is carved from the training window only; scaler and input matrices as in Tier 1; no look at the locked test set until every model and hyperparameter is fixed.
 
