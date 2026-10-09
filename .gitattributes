@@ -1,6 +1,0 @@
-* text=auto
-*.gz binary
-*.parquet binary
-*.zip binary
-*.png binary
-*.jpg binary
