@@ -1,0 +1,16 @@
+# Install with:  pip install -r requirements.txt
+# then:          pip install -e .
+# After the first successful install, record exact versions:
+#                pip freeze > requirements-lock.txt   (commit that file)
+numpy>=2.0
+pandas>=2.2
+pyarrow>=16
+pyyaml>=6.0
+matplotlib>=3.8
+scikit-learn>=1.5
+pyreadr>=0.5          # optional: V-Dem .RData -> Parquet without R
+pytest>=8
+jupyter
+ipykernel
+nbformat
+nbclient

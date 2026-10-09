@@ -1,0 +1,34 @@
+{
+  "name": "raw_ert_v16",
+  "repo": "vdeminstitute/ERT",
+  "commit": "7fd51ce856a054582820bb0ac0ccae85371ff9be",
+  "files": [
+    {
+      "path": "data/raw/ert/ERT_codebook_v16.pdf",
+      "bytes": 301127,
+      "sha256": "915f1775d5e62c929b7b6a00eb8a76a46778745a8c6cee5c84288572e14a3447",
+      "recorded_utc": "2026-10-09T20:28:11+00:00",
+      "key": "ert_codebook",
+      "url": "https://raw.githubusercontent.com/vdeminstitute/ERT/7fd51ce856a054582820bb0ac0ccae85371ff9be/inst/ERT_codebook_v16.pdf",
+      "commit": "7fd51ce856a054582820bb0ac0ccae85371ff9be"
+    },
+    {
+      "path": "data/raw/ert/ert.csv",
+      "bytes": 3167661,
+      "sha256": "26e805df073a26973f5c0fbefdcdd0d20776245d71092a575063e47ffac6db5f",
+      "recorded_utc": "2026-10-09T20:28:08+00:00",
+      "key": "ert_csv",
+      "url": "https://raw.githubusercontent.com/vdeminstitute/ERT/7fd51ce856a054582820bb0ac0ccae85371ff9be/inst/ert.csv",
+      "commit": "7fd51ce856a054582820bb0ac0ccae85371ff9be"
+    },
+    {
+      "path": "data/raw/ert/vdem.RData",
+      "bytes": 33878255,
+      "sha256": "39b412d39a061c18f20c98e4ad4d6355b05a0441df31be4ee9aec420dc3d95ea",
+      "recorded_utc": "2026-10-09T20:28:11+00:00",
+      "key": "vdem_rdata",
+      "url": "https://raw.githubusercontent.com/vdeminstitute/ERT/7fd51ce856a054582820bb0ac0ccae85371ff9be/data/vdem.RData",
+      "commit": "7fd51ce856a054582820bb0ac0ccae85371ff9be"
+    }
+  ]
+}

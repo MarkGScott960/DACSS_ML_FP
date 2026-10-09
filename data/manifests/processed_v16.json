@@ -1,0 +1,31 @@
+{
+  "name": "processed_v16",
+  "state_source": "ert_truncated",
+  "stage1_event": "confirmation",
+  "files": [
+    {
+      "path": "data/processed/country_year_states.parquet",
+      "bytes": 13925,
+      "sha256": "969c53d4aaf508348c9f416c30f97d87726896f56e60ef5ea06e257bade36385",
+      "recorded_utc": "2026-10-09T20:33:44+00:00"
+    },
+    {
+      "path": "data/processed/democratic_episodes.parquet",
+      "bytes": 23301,
+      "sha256": "6719f57be612e5f9b8026e5ac1ece1fe5ac0df66e0db9b17279df0fa6c1df38c",
+      "recorded_utc": "2026-10-09T20:33:44+00:00"
+    },
+    {
+      "path": "data/processed/labels.parquet",
+      "bytes": 20579,
+      "sha256": "cec0d521d76a720c7e392e8f6407142e9d692a3f2e5c41e766836e7077f1075c",
+      "recorded_utc": "2026-10-09T20:33:44+00:00"
+    },
+    {
+      "path": "data/processed/panel.parquet",
+      "bytes": 901179,
+      "sha256": "de6cf23711ba61d38b8ece5697ee06a7af700e420bab9a48d2b676e7c16a493f",
+      "recorded_utc": "2026-10-09T20:33:44+00:00"
+    }
+  ]
+}

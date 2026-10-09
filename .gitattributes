@@ -1,0 +1,15 @@
+# Normalise line endings so Windows and Linux checkouts hash identically.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.parquet binary
+*.RData binary
+*.rda binary
+*.pdf binary
+*.png binary
+*.zip binary
+
+# Notebooks: show as text diffs
+*.ipynb text eol=lf

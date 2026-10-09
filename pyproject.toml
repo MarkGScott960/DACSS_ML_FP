@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flypredictor"
+version = "0.1.0"
+description = "DACSS 756 final project: forecasting democratic backsliding (onset and breakdown) with V-Dem and ERT."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Mark Scott" }]
+dependencies = [
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+    "scikit-learn>=1.5",
+]
+
+[project.optional-dependencies]
+# pyreadr converts the V-Dem .RData file without R. If it has no wheel for your
+# Python version, set `rdata_conversion: r` in config/project.yaml instead.
+rdata = ["pyreadr>=0.5"]
+notebooks = ["jupyter", "ipykernel", "nbformat", "nbclient"]
+dev = ["pytest>=8"]
+# Added in later zips (models). Listed now so the environment can be built once.
+models = ["lightgbm>=4", "shap>=0.45", "lifelines>=0.29"]
+# scikit-survival and torch are installed separately (see README) because their
+# wheels depend on platform / CUDA build.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "realdata: needs data/processed from notebook 01-02 (skipped if missing)",
+]

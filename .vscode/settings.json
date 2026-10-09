@@ -1,0 +1,6 @@
+{
+  "jupyter.notebookFileRoot": "${workspaceFolder}",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "files.eol": "\n"
+}

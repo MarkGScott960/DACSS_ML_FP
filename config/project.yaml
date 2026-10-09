@@ -1,0 +1,127 @@
+# FlyPredictor: project configuration.
+# Every choice that can move a result lives here or in features.yaml.
+# Freezing the pre-registration = tagging the commit that holds these files (git tag prereg-v1).
+# Section numbers refer to docs/plan_of_record.md.
+
+project:
+  name: FlyPredictor
+  package: flypredictor
+  plan_version: 2            # plan of record, revised 2026-10-09
+
+# ---------------------------------------------------------------------------
+# Data sources (plan section 3.1). Everything is pinned to an exact commit so a
+# re-download produces byte-identical files (checked against data/manifests/).
+# The V-Dem v16 Full+Others country-year file is taken from the ERT package
+# data, which is the exact V-Dem release ERT v16 was built from.
+# ---------------------------------------------------------------------------
+sources:
+  ert:
+    repo: vdeminstitute/ERT
+    commit: 7fd51ce856a054582820bb0ac0ccae85371ff9be   # ERT 16.0, 2026-03-31
+    files:
+      ert_csv: inst/ert.csv
+      vdem_rdata: data/vdem.RData
+      ert_codebook: inst/ERT_codebook_v16.pdf
+  vdem:
+    version: "16"
+    note: "Taken from the ERT v16 package data (vdem.RData); V-Dem v16 Full+Others, 28,092 x 4,618"
+  vdem_v10:
+    version: "10"
+    note: "Vintage test only (plan 10.2). Download added in a later zip."
+
+# How the V-Dem .RData file is converted to Parquet.
+#   auto    = try pyreadr, fall back to R (R/convert_vdem.R)
+#   python  = pyreadr only
+#   r       = R only
+rdata_conversion: auto
+
+# Path to Rscript. null = find it automatically (PATH, then C:/Program Files/R/*/bin).
+rscript: null
+
+# ---------------------------------------------------------------------------
+# Sample and timing (plan sections 3 and 7)
+# ---------------------------------------------------------------------------
+years:
+  first: 1900
+  last: 2025                 # last year in V-Dem v16 / ERT v16
+
+democracy:
+  regime_var: v2x_regime     # Regimes of the World, observed at year t
+  min_regime: 2              # 2 = electoral democracy, 3 = liberal democracy
+  # Also require ERT's own regime type (reg_type == 1) at t. ERT decides whether an episode
+  # starts in a democracy with reg_type, not with RoW; a RoW democracy that ERT treats as an
+  # autocracy (e.g. Argentina 1974-75, Ghana 1980, Fiji 2003-05, Madagascar 2008) can never
+  # produce a democratic episode or breakdown, so its coups would be labelled 0.
+  # 45 RoW-democracy rows are affected (decision D-15). false = plan-v2 behaviour (RoW only).
+  require_ert_democracy: true
+
+ert:
+  # ERT default parameters (codebook v16). Used for the shipped labels and for
+  # the real-time confirmation rule (plan 3.3).
+  defaults:
+    start_incl: 0.01
+    cum_incl: 0.10
+    year_turn: 0.03
+    cum_turn: 0.10
+    tolerance: 5
+  # Threshold sensitivity (plan 10.5); run through R/ert_variants.R after the lock.
+  variants:
+    strict: {start_incl: 0.01, cum_incl: 0.15, year_turn: 0.03, cum_turn: 0.10, tolerance: 5}
+    loose:  {start_incl: 0.01, cum_incl: 0.07, year_turn: 0.03, cum_turn: 0.10, tolerance: 5}
+  # Real-time episode status (plan 3.3): ERT's get_eps is re-run on V-Dem truncated
+  # at each year T (codingend capped at T), which gives every country's episode
+  # status exactly as ERT would have coded it in year T. About 5 s per year.
+  realtime_years: [1900, 2025]          # inclusive range of truncation years
+
+labels:
+  # Where each country-year's state (stage 1 at risk / stage 2 in episode / neither) comes from:
+  #   ert_truncated = ERT re-run on data truncated at t (exact real-time status; needs R + ERT)  [primary]
+  #   rule          = Python approximation: final episodes, "confirmed" once the EDI range since the
+  #                   pre-episode year reaches cum_incl; uses final end years (slight hindsight)  [fallback]
+  #   hindsight     = final ERT coding, no confirmation delay (plan v1)                             [sensitivity]
+  state_source: ert_truncated
+  # Stage-1 event definition. DECISION PENDING (docs/decisions_log.md, D-07):
+  #   confirmation = ERT first codes the country as in a democratic episode in t+1..t+k
+  #                  (with ert_truncated: the real-time declaration year; with rule: the confirmation year)
+  #   onset        = a final-coded democratic episode STARTS in t+1..t+k (plan v2 text)
+  stage1_event: confirmation
+  # Only used when stage1_event = onset: rows inside an episode that has started (final coding)
+  # but is not yet known at t.  zero = keep, label 0 (plan v2 text);  drop = remove them.
+  onset_unconfirmed_rows: zero
+  # Also label every stage-1 row with "breakdown within k years" (real-time breakdown forecast
+  # across all democracies). DECISION PENDING (docs/decisions_log.md, D-08). Costs nothing to build.
+  stage1_breakdown_target: true
+  # Sensitivity outcome (decision D-15): "RoW moves from democracy to autocracy within k years",
+  # whether or not ERT codes it as a democratic breakdown (includes near-threshold drops such as
+  # Kenya 2007 and coups that ERT files as regressed autocracy). Scored on stage-1 rows; uses the
+  # stage-1 maturity buffer (the RoW change is observable the year it happens).
+  stage1_row_breakdown_target: true
+  horizons_stage1: [1, 2, 3, 5]
+  horizons_stage1_exploratory: [10]
+  horizons_stage2: [1, 2, 3]
+  # Label-maturity buffers in years (plan 3.5). Origins with t + k > last_year - buffer are dropped.
+  # Defaults are placeholders until notebook 03 sets them from the data.
+  maturity:
+    stage1: {default: 0, sensitivity: [2, 4]}   # 0 is correct for stage1_event = confirmation
+    stage1_onset: {default: 7, sensitivity: [2, 4]}  # used only if stage1_event = onset (p90 start->confirm lag = 7)
+    stage2: {default: 5, sensitivity: [3, 7]}
+
+# ---------------------------------------------------------------------------
+# Splits (plan 7.1). Years are FORECAST ORIGINS.
+# ---------------------------------------------------------------------------
+splits:
+  dev_last_origin: 2004
+  validation:
+    first_block_start: 1970
+    block_length: 5
+    last_block_end: 2004
+  locked:
+    first_origin: 2005
+    last_origin: 2024
+  # Training for a validation block / the locked run uses origins <= block_start - 1 - k
+  # so that no training label window overlaps the evaluation period.
+  gap_equals_horizon: true
+
+seeds:
+  global: 20261009
+  neural: [1, 2, 3, 4, 5]

@@ -1,0 +1,43 @@
+# --- Data: never committed (V-Dem alone is ~400 MB uncompressed). Manifests ARE committed. ---
+data/raw/**
+data/interim/**
+data/processed/**
+!data/**/.gitkeep
+!data/manifests/
+!data/manifests/**
+
+# --- Large result files; small summary tables are committed ---
+results/**/*.parquet
+results/**/*.pkl
+results/**/*.pt
+!results/**/.gitkeep
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- R / renv ---
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/local/
+renv/staging/
+renv/cellar/
+renv/python/
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

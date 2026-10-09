@@ -1,0 +1,116 @@
+# FlyPredictor: feature groups (plan section 4.1).
+#
+# Each group has:
+#   set:   clean  -> in both the clean and full feature sets
+#          full   -> in the full set only (EDI components or EDI-derived)
+#          party  -> party-augmented arm only (exploratory E12; coverage 1970-2019)
+#   role:  leading | lagging | context | trajectory
+#   in_edi: true if the indicator feeds V-Dem's Electoral Democracy Index (v2x_polyarchy),
+#           i.e. is mechanically tied to the ERT outcome.
+#   verify: true = check the code / EDI membership against the v16 codebook before freezing.
+#
+# Raw indicators only. Levels, 1-year and 3-year changes are built by
+# src/flypredictor/data/features.py (later zip), which reads this file.
+# EDI membership follows V-Dem's index structure:
+#   v2x_polyarchy <- v2x_freexp_altinf, v2x_frassoc_thick, v2xel_frefair, v2x_suffr, v2x_elecoff
+#   v2x_freexp_altinf <- v2mecenefm v2meharjrn v2meslfcen v2mebias v2mecrit v2merange v2cldiscm v2cldiscw v2clacfree
+#   v2x_frassoc_thick <- v2psparban v2psbars v2psoppaut v2elmulpar v2cseeorgs v2csreprss
+#   v2xel_frefair     <- v2elembaut v2elembcap v2elrgstry v2elvotbuy v2elirreg v2elintim v2elpeace v2elfrfair
+
+groups:
+  polarization:
+    set: clean
+    role: leading
+    in_edi: false
+    vars: [v2cacamps]
+
+  political_violence:
+    set: clean
+    role: leading
+    in_edi: false
+    vars: [v2caviol, v2clkill]
+
+  courts:
+    set: clean
+    role: leading
+    in_edi: false        # liberal component, not EDI
+    vars: [v2x_jucon, v2juhcind, v2juncind, v2juhccomp, v2jureview, v2exrescon]
+
+  legislative_constraints:
+    set: clean
+    role: leading
+    in_edi: false        # liberal component, not EDI
+    vars: [v2xlg_legcon, v2lgqstexp, v2lginvstp, v2lgotovst, v2lgoppart]
+    verify: true
+
+  elite_alignment:
+    # Proxy for Paxton's elite collusion (plan 4.1, M8). Regime support groups:
+    # size of the support coalition and whether business elites, the military and
+    # party elites are among the regime's supporters.
+    set: clean
+    role: leading
+    in_edi: false
+    vars: [v2regsupgroupssize, v2regsupgroups_2, v2regsupgroups_3, v2regsupgroups_5]
+    verify: true         # confirm category numbering (_2 party elites, _3 business, _5 military) in the v16 codebook
+
+  structural:
+    set: clean
+    role: context
+    in_edi: false
+    vars: [e_gdppc, e_pt_coup, e_pt_coup_attempts]
+    coverage_rules:
+      e_gdppc: carry_forward_with_age      # series ends 2019 (verified in V-Dem v16)
+      e_pt_coup: structurally_missing_before_1950
+      e_pt_coup_attempts: structurally_missing_before_1950
+
+  media:
+    set: full
+    role: lagging
+    in_edi: true
+    vars: [v2mecenefm, v2meharjrn, v2meslfcen, v2mebias, v2mecrit, v2merange]
+
+  association_opposition:
+    set: full
+    role: lagging
+    in_edi: true
+    vars: [v2csreprss, v2psoppaut, v2psparban, v2psbars, v2cseeorgs]
+
+  elections:
+    set: full
+    role: lagging
+    in_edi: true
+    vars: [v2elembaut, v2elembcap, v2elvotbuy, v2elirreg, v2elintim, v2elfrfair]
+
+  outcome_trajectory:
+    # The outcome's own index. Changes and "decline since last peak" are derived in features.py.
+    set: full
+    role: trajectory
+    in_edi: true
+    vars: [v2x_polyarchy]
+
+  regime_subtype:
+    # Liberal vs electoral democracy flag, derived from v2x_regime (built partly from EDI thresholds).
+    # Removed from the clean set in plan v2 (finding C3).
+    set: full
+    role: trajectory
+    in_edi: true
+    vars: [v2x_regime]
+
+  party_system:
+    # Party-augmented arm (E12). V-Dem's own country-year party-system indices,
+    # aggregated from V-Party for governing parties: no separate V-Party merge needed.
+    # Coverage 1970-2019 only (verified in V-Dem v16).
+    set: party
+    role: leading
+    in_edi: false
+    vars: [v2xpas_democracy_government, v2xpas_exclusion_government]
+    verify: true
+
+# Identifiers and grouping variables carried into the panel but never used as predictors.
+id_vars: [country_id, country_text_id, country_name, year]
+grouping_vars: [e_regionpol]
+
+# Variables used only as external outcomes (plan 10.3). Never predictors.
+external_outcomes:
+  e_lexical_index: {coverage_end: 2024}
+  e_boix_regime: {coverage_end: 2020}

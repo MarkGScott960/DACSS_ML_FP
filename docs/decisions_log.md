@@ -1,0 +1,100 @@
+# Decisions log
+
+One line of rationale per decision; full reasoning in `plan_of_record.md` (cited by section) or in the progress log. A decision is changed by adding a new entry, never by editing an old one.
+
+Status: **D** decided · **P** pending (needs Mark's call before the pre-registration freeze) · **I** implementation choice (made while coding; open to override)
+
+| ID | Date | Status | Decision | Why / where |
+|---|---|---|---|---|
+| D-01 | 2026-10-09 | D | Democratic episodes = ERT `aut_ep_prch == 1`; regime read in the pre-episode year | ERT's own convention; 101 episodes, not 110 (plan 3.2) |
+| D-02 | 2026-10-09 | D | Risk sets use only what was knowable at *t* (real-time states) | Final ERT coding backdates starts and knows end years (plan 3.3) |
+| D-03 | 2026-10-09 | D | `v2x_regime` and all EDI-derived variables only in the full set | RoW is built from EDI thresholds (plan 4.1) |
+| D-04 | 2026-10-09 | D | H2a = incremental skill via drop-group refits; H3 = relative mechanical share | Original H2/H3 true under persistence alone (plan 2.1) |
+| D-05 | 2026-10-09 | D | Common window for *k* ≤ 5; *k* = 10 exploratory | *k* = 10 shrank the locked window to 2005–2013 (plan 3.6) |
+| D-06 | 2026-10-09 | D | Training population (P1–P3) chosen on development folds | V-Dem already exceeds 10,000 rows (plan 3.7) |
+| D-07 | 2026-10-09 | **P** | **Stage-1 event: `confirmation` (recommended) or `onset`** | See note D-07 below |
+| D-08 | 2026-10-09 | **P** | **Stage 2 / H5: real-time stage 2 is too small; choose a re-scope** | See note D-08 below |
+| D-09 | 2026-10-09 | I | V-Dem v16 taken from the ERT v16 package data (`vdem.RData`), pinned to ERT commit `7fd51ce` | Exactly the data ERT v16 was built from; byte-reproducible download from GitHub; no web form |
+| D-10 | 2026-10-09 | I | `state_source: ert_truncated` (ERT `get_eps` re-run on data truncated at every year 1900–2025) | Exact real-time status, about 5 s per year; the Python rule agrees on 99.6% of democracy-years and is the fallback |
+| D-11 | 2026-10-09 | I | R writes Parquet with `nanoparquet`, not `arrow` | CRAN binaries for Windows, no C++ toolchain; output verified identical to the Python path |
+| D-12 | 2026-10-09 | I | Party arm uses V-Dem's own `v2xpas_*_government` indices instead of a V-Party merge | No governing-party matching needed; same 1970–2019 coverage. Covers only 16% of democracy-years: candidate to cut (see note) |
+| D-13 | 2026-10-09 | I | Label maturity buffer applies to positives and negatives alike | Dropping only negatives near the data end would inflate the base rate |
+| D-14 | 2026-10-09 | I | Coups (`e_pt_coup*`) and GDP (`e_gdppc`) get coverage rules, not missingness flags | Both flagged by the era-proxy audit (coups start 1950; GDP ends 2019) |
+| D-15 | 2026-10-09 | I | Risk sets = RoW democracy **and** ERT `reg_type == 1` (`democracy.require_ert_democracy: true`); add a `row_breakdown` sensitivity outcome (any RoW democracy → autocracy change) | 45 RoW-democracy rows that ERT treats as autocracies could never carry a positive, so their coups were labelled 0. See note D-15 |
+| D-16 | 2026-10-09 | I | Era-proxy audit also flags series that **end early** (≥ 95% missing in the last 6 years); new development-vs-locked coverage audit (`window_coverage`) | The correlation rule missed `v2xpas_*` (corr −0.16, 100% missing 2020–2025). See note D-16 |
+| D-17 | 2026-10-09 | **P** | **GDP after 2019: drop `e_gdppc`, or replace it with a series that runs to 2024** | "Years since observed" is ~0 in training and 1–5 in the locked window. See note D-16 |
+| D-07a | 2026-10-09 | **P** | **Addendum to D-07: the `confirmation` event is mostly breakdown in the development years** | Changes the D-07 recommendation. See note D-07a |
+
+## Note D-07 · What does stage 1 predict? (pending)
+
+The plan v2 text says stage 1 predicts **onset**: an episode *starts* in *t*+1 … *t*+*k*. Building the labels exposed a problem with that.
+- An episode's start year is only knowable once the decline reaches 0.10. The audit shows this takes a median of 2 years and up to 10.
+- So the rows between start and confirmation are either labelled 0 (`onset_unconfirmed_rows: zero`), which penalises a model for correctly flagging a slide that is under way, or dropped (`drop`), which brings back hindsight.
+- And the onset label needs a 7-year maturity buffer (90th percentile of start→confirmation lags), which removes most of the recent locked-test origins.
+
+**Recommendation: `stage1_event: confirmation`.** The event is "ERT first codes the country as being in a democratic episode within *k* years" (a real-time declaration from the truncated re-runs).
+- It is observable the year it happens, so no buffer is needed.
+- Every at-risk row is labelled consistently.
+- The research question becomes "will this democracy be in a recognised backsliding episode within *k* years?", which is also what a user of a warning system would act on.
+
+Both options are implemented. Switching is one line in `config/project.yaml`.
+
+## Note D-08 · Stage 2 and H5 (pending)
+
+The audit (`results/dev/audits/breakdown_timing.csv`) shows:
+- **51 of the 71 breakdowns happen at or before the point where the episode could be confirmed in real time**, and 23 happen in the episode's first year (coups, self-coups).
+- Real-time stage 2 (democracies inside a *known* episode) therefore has about 148 country-years in total.
+  - Development: 21 observable rows, 6 events at *k* = 1.
+  - Locked test: 53 rows, 7 events.
+- That is too small for confirmatory ML.
+
+Options (not exclusive):
+- **A. Breakdown forecasting on all democracies (real-time).** Label every stage-1 row with "breakdown within *k* years" (`stage1_breakdown_target: true`, already built).
+  - Development: 35 events at *k* = 1, 181 positive rows at *k* = 5.
+  - Locked test: 13 events at *k* = 1, 56 positive rows at *k* = 5.
+  - This keeps a fully ML breakdown task with the whole lineup, close to V-Forecast's design.
+- **B. Conditional stage 2 ("given a slide has begun").** Use hindsight membership (`state_source: hindsight` for stage 2 only): about 393 country-years from 65 episodes. This is honest as a conditional analysis but not a real-time forecast. The survival models and the Boese et al. baseline live here; it fits as exploratory.
+- **C. Keep real-time stage 2** as a descriptive case study (20 forecastable breakdowns).
+
+Recommendation: **A as H5 (at *k* = 3 or 5, chosen by the power simulation), B as exploratory ML (E1–E3), and report the 51/71 timing result itself.** That breakdowns mostly come before a slide is recognisable is a substantive finding for the paper and the talk.
+
+## Note D-07a · The stage-1 "confirmation" event is mostly breakdown before 2005 (pending)
+
+Found in the zip-1 review (audit A9, `results/dev/audits/declaration_timing.csv`).
+- 54 of the 101 real-time declarations come in a year when the country is **already not a democracy**: the slide is first recognised at or after breakdown. 38 of the 71 breakdowns are declared in the breakdown year itself (mostly coups).
+- By period: development 35 of 42 declarations come at or after breakdown; later years 19 of 59.
+- In the labels (stage 1, k = 1): only **7 of 36** development positives are declarations made while the country is still a democracy, against **40 of 53** in the locked test.
+- Overlap with the stage-1 breakdown target: 36 of 66 declaration positives are also breakdown positives at k = 1; 213 of 309 at k = 5.
+
+Consequences:
+- A stage-1 model trained on 1900–2004 learns mostly to predict coups and sudden breakdowns, then is tested on gradual backsliding. H1 would partly measure that change in the event, not forecasting skill.
+- H1 and H5 are close to the same test; E1 (do onset and breakdown drivers differ?) is weakened.
+
+Options:
+- **A. "Declared while still a democracy"** as the stage-1 event, with breakdown as a competing outcome (H5). Cleanest match to the Paxton framing. Only 7 development events at k = 1 and 34 at k = 5, so it probably forces k = 5 as the primary horizon or a different training window. Needs the power simulation.
+- **B. Keep `confirmation`, reframe** stage 1 as "any recognised autocratization event (gradual or abrupt)", and make breakdown (H5) the main breakdown question. State the composition shift in the pre-registration.
+
+Recommendation: decide after the power simulation. Adopt A if 34 development events at k = 5 support a detectable δ; otherwise B. The original D-07 recommendation (`confirmation`) stands only in form B. Implementing A is a new event type in `episodes.country_events` (a declaration whose year is stage 2).
+
+## Note D-15 · Risk-set definition: RoW vs ERT regime type
+
+Found in the zip-1 review (audit A8, `results/dev/audits/row_transitions.csv`).
+- Stages used RoW (`v2x_regime ≥ 2`). ERT decides whether an episode starts in a democracy with `reg_type`, and codes democratic breakdowns only inside such episodes.
+- 45 RoW-democracy rows have ERT `reg_type == 0`. They include the years before Argentina 1976, Ghana 1981, Fiji 2006, Madagascar 2009, Libya 2014 and Mali 2018; ERT files those coups as "regressed autocracy" (outcome 5), so they were labelled 0 on every target.
+- **Fix (implemented):** `democracy.require_ert_democracy: true` removes those rows (stage 1: 5,076 → 5,031; stage 2 unchanged at 148). Event counts are unchanged; only mislabelled negatives go. `states.row_democracy` keeps the RoW-only flag for diagnostics.
+- RoW counts 104 democracy → autocracy changes since 1900; ERT counts 71 as democratic breakdowns. Of the other 33, 11 revert within 2 years (near-threshold flicker); 22 last. Some of the lasting ones are in ERT democracies but never reach an ERT episode (Kenya 2017, Nigeria 2021, Georgia 2008, Montenegro 2013, Sierra Leone 2023).
+- **Sensitivity (implemented):** `labels.stage1_row_breakdown_target: true` adds the event `row_breakdown` (any RoW change, from `row_regch_event == −1`) on stage-1 rows, buffer 0. k = 1: development 42 positives, locked 26 (vs 35 and 13 for ERT breakdowns; the locked counts are not on the same origin range because the ERT target has a 5-year buffer).
+- For a fully RoW-based sensitivity, run with `require_ert_democracy: false` as well (the `row_breakdown` target on the reduced risk set cannot see the reg_type-0 coups).
+- To pre-register: the primary breakdown outcome is ERT's; `row_breakdown` is a sensitivity analysis; near-threshold RoW drops are excluded by ERT's definition, and the paper says so.
+
+## Note D-16 · Coverage that ends before the locked window
+
+Found in the zip-1 review (audits A7 and A7b, `era_proxy_flags.csv`, `window_coverage.csv`).
+- `era_proxy_flags` now has a second rule, `ends_early`, and a `reason` column. Flagged: `e_pt_coup*` (corr), `e_gdppc` (corr + ends_early), `v2xpas_*` (ends_early; previously missed).
+- `window_coverage` compares missing shares in development vs locked democracy rows and flags any series ending before the last locked origin (2024): `e_gdppc` (missing 1.5% in development, 24.5% in the locked window) and `v2xpas_*` (end 2019).
+- **D-17 (pending):** the `carry_forward_with_age` rule for GDP produces a feature that is out of distribution in the locked window. Options: drop `e_gdppc` from the clean set; or replace it with a series that runs to 2024 (would need a new pinned source). Recommendation: drop it unless a pinned replacement is easy, and keep GDP as a context variable in descriptive tables only.
+- `v2xpas_*`: strengthens the case in note D-12 for cutting the party arm.
+
+## Note D-12 · Party arm coverage
+
+`v2xpas_*` cover 1970–2019 and only about 16% of democracy country-years. A party arm fit on that subset will be small and will end before the locked window's last 5 years. It is already near the top of the cut order; consider cutting it outright once the power simulation is done.

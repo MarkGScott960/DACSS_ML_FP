@@ -1,0 +1,23 @@
+{
+  "name": "interim_v16",
+  "files": [
+    {
+      "path": "data/interim/ert_realtime_truncated.parquet",
+      "bytes": 67453,
+      "sha256": "2c89956664a38a4626a1424a71605ba8997a6bd6b0d5facd7b07add5bba3225f",
+      "recorded_utc": "2026-10-09T20:32:20+00:00"
+    },
+    {
+      "path": "data/interim/ert_v16.parquet",
+      "bytes": 175074,
+      "sha256": "e4a09fbccc4ca8a90de3add5e6c865245652046e5ad76287e12333a5ba5761c1",
+      "recorded_utc": "2026-10-09T20:32:20+00:00"
+    },
+    {
+      "path": "data/interim/vdem_v16.parquet",
+      "bytes": 46204212,
+      "sha256": "746e4f9579b830e67c98a20de3c12bd7affb90702cde004a3e912829cdc75825",
+      "recorded_utc": "2026-10-09T20:32:20+00:00"
+    }
+  ]
+}
