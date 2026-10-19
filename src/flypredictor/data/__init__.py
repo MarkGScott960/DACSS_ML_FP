@@ -7,6 +7,7 @@ Order of use (see notebooks/0x_data/02_panel_labels.ipynb):
     rt    = ert_jobs.load_realtime(paths)              # needs R; skip if state_source = rule
     ev    = episodes.country_events(eps, rt, ert)
     st    = states.assign_states(ert, eps, cfg, rt)
+    ev    = episodes.split_declarations(ev, st)          # gradual vs abrupt (H1b)
     lab   = labels.build_labels(st, ev, cfg)
     panel = panel.build_panel(paths, cfg, st)
 """

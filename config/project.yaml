@@ -80,7 +80,7 @@ labels:
   #                   pre-episode year reaches cum_incl; uses final end years (slight hindsight)  [fallback]
   #   hindsight     = final ERT coding, no confirmation delay (plan v1)                             [sensitivity]
   state_source: ert_truncated
-  # Stage-1 event definition. DECISION PENDING (docs/decisions_log.md, D-07):
+  # Stage-1 event definition. DECIDED (docs/decisions_log.md, D-07b): confirmation.
   #   confirmation = ERT first codes the country as in a democratic episode in t+1..t+k
   #                  (with ert_truncated: the real-time declaration year; with rule: the confirmation year)
   #   onset        = a final-coded democratic episode STARTS in t+1..t+k (plan v2 text)
@@ -96,6 +96,14 @@ labels:
   # Kenya 2007 and coups that ERT files as regressed autocracy). Scored on stage-1 rows; uses the
   # stage-1 maturity buffer (the RoW change is observable the year it happens).
   stage1_row_breakdown_target: true
+  # Split each real-time declaration by whether the country is still a democracy in the
+  # declaration year (decision D-07b): 'declaration_dem' (gradual: recognised while democratic)
+  # and 'declaration_abrupt' (recognised at or after breakdown). Used for H1b, which scores
+  # the H1 models on gradual events only.
+  stage1_declaration_split: true
+  # Stage 2 (decision D-08): real-time stage 2 is descriptive only (148 country-years).
+  # The exploratory conditional stage-2 analysis (E1-E3) uses hindsight episode membership.
+  stage2_exploratory_state_source: hindsight
   horizons_stage1: [1, 2, 3, 5]
   horizons_stage1_exploratory: [10]
   horizons_stage2: [1, 2, 3]
@@ -118,9 +126,71 @@ splits:
   locked:
     first_origin: 2005
     last_origin: 2024
+    # Decision D-07b: refit every year with hyperparameters frozen from development.
+    #   annual = for each locked origin t, train on every label known by t (see training_cutoff)
+    #   frozen = one fit on origins <= first_origin - 1 - k - lag (plan v2; sensitivity)
+    refit: annual
+    refit_sensitivity: frozen
   # Training for a validation block / the locked run uses origins <= block_start - 1 - k
   # so that no training label window overlaps the evaluation period.
   gap_equals_horizon: true
+  # Training-label cutoff for forecast origin t (validation block start or locked year):
+  #   origins s with s <= t - 1 - k - lag, where lag = the event's maturity buffer
+  #   (0 for declarations, 5 for ERT breakdowns: a breakdown is only known once ERT can
+  #   code it as genuine). Implemented in flypredictor.eval.splits.training_cutoff.
+  training_label_lag: maturity
+
+# ---------------------------------------------------------------------------
+# Evaluation and inference (plan section 8)
+# ---------------------------------------------------------------------------
+evaluation:
+  alert_budget: 0.10          # top 10% of risk scores raise an alert
+  ci_level: 0.95
+  bootstrap_reps: 2000        # country-clustered bootstrap
+  bootstrap_seed: 20261009
+  # Persistence baseline (plan 6.1): base rate within regime subtype (v2x_regime 2 vs 3)
+  # x 3-year EDI change terciles, cut points fixed on development democracy rows.
+  persistence_bins: 3
+  persistence_smoothing: 1.0  # pseudo-count toward the training base rate in each bin
+  # Intercept updating for annual refits (decision D-18): before scoring origin t, shift every
+  # model's predictions (persistence included) on the logit scale so they match the event rate
+  # of the last N years of training labels known at t. 0 = off. Counters the base-rate shift
+  # (development 1.1% vs locked 3.0% declarations per stage-1 year at k = 1).
+  recalibration_window: 10
+
+# ---------------------------------------------------------------------------
+# Confirmatory family and tuning (decisions D-20b, D-21; pre-registration sections 2 and 7)
+# ---------------------------------------------------------------------------
+confirmatory:
+  primary_model: ridge           # D-20b; simulated power applies to ridge
+  hypotheses: [H1]               # every other hypothesis is estimation only (interval, no pass/fail)
+  h1_horizons: [1, 2]            # intersection test; k = 3 and 5 are the decay curve
+  alpha: 0.05
+  # delta = design effect (beta = 2; 76.5% power for the k = 1 and 2 rule; D-20c), NOT a pass threshold.
+  # Pass rule: 95% interval excludes the baseline on Brier skill and PR-AUC / base rate.
+  mde_h1_brier_skill: 0.06
+  h5_headline_k: 1
+
+tuning:
+  configs_per_class: 40          # per model class per horizon; grid for penalised logits, random search otherwise
+  search: random
+  gru_search_seeds: 1            # search with one seed, then re-run the best configuration with seeds.neural
+  objective: log_loss
+
+# ---------------------------------------------------------------------------
+# Power simulation (plan 7.2, item 6; notebooks/0x_data/04_power.ipynb)
+# ---------------------------------------------------------------------------
+power:
+  reps: 200                   # simulated datasets per effect size
+  bootstrap_reps: 500         # per simulated dataset (2000 in the real analysis)
+  effect_sizes: [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]    # beta: log-odds per SD of the planted signal (0 = mechanical only)
+  target_power: 0.80
+  seed: 20261010
+  mechanical_beta: 0.5        # fixed effect of the 3-year EDI change (gives persistence realistic skill)
+  model: ridge                # fast stand-in for the elastic net (checked in notebook 04, stand_in_check)
+  ridge_C: 0.01
+  enet_C: 0.1                 # fixed elastic-net settings for the stand-in check (tuned in the real analysis)
+  enet_l1_ratio: 0.5
 
 seeds:
   global: 20261009

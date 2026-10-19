@@ -5,7 +5,7 @@ DACSS 756 (Machine Learning) final project, Mark Scott, UMass Amherst.
 Forecasting, for the world's democracies, whether a backsliding episode will begin within *k* years and whether democracy will break down. Data: V-Dem v16 and the Episodes of Regime Transformation (ERT) v16. Framing: Paxton's account of fascism as a process with warning signs.
 
 * **Plan of record:** [`docs/plan_of_record.md`](docs/plan_of_record.md)
-* **Decisions** (including two pending ones, D-07 and D-08): [`docs/decisions_log.md`](docs/decisions_log.md)
+* **Decisions** (none pending; ready to freeze): [`docs/decisions_log.md`](docs/decisions_log.md)
 * **Progress:** [`docs/progress_log.md`](docs/progress_log.md)
 * **Pre-registration (draft):** [`prereg/preregistration.md`](prereg/preregistration.md)
 
@@ -67,7 +67,8 @@ If R cannot be set up, set `labels.state_source: rule` in `config/project.yaml`.
 | `notebooks/0x_data/01_fetch.ipynb` | Pinned download, manifests, Parquet, real-time ERT re-runs (R) | ~1 min + ~10 min (R) |
 | `notebooks/0x_data/02_panel_labels.ipynb` | Episodes, states, labels, panel → `data/processed/` | seconds |
 | `notebooks/0x_data/03_audits.ipynb` | Pre-freeze audits → `results/dev/audits/*.csv` | seconds |
-| `pytest` | 37 fixture tests + 3 real-data checks (`pytest -m realdata`) | seconds |
+| `notebooks/0x_data/04_power.ipynb` | Power simulation (synthetic labels only) → `results/dev/power/` | ~30–60 min on 8 cores |
+| `pytest` | fixture tests + real-data checks (`pytest -m realdata`) | seconds |
 
 ```text
 GitHub (ERT @ 7fd51ce) ──► data/raw/ert/  ──► data/interim/*.parquet ──┐
@@ -90,7 +91,10 @@ src/flypredictor/
   config.py paths.py manifest.py rbridge.py fetch.py
   data/          episodes.py · ert_jobs.py · states.py · labels.py · panel.py
   audit/         coverage.py · maturity.py · realtime.py
-  eval/ models/ interpret/      empty until zip 2 / the pre-registration freeze
+  data/features.py  levels, 1- and 3-year changes, coverage rules; training-only preprocessor
+  eval/          splits · metrics · bootstrap · lockbox · recalibration · power   (zip 2)
+  models/        baselines (persistence, EDI momentum) · linear (elastic net, ridge)   (zip 2; rest after the freeze)
+  interpret/     empty until after the freeze
 notebooks/       0x_data · 1x_development · 2x_locked · 3x_robustness · 4x_figures
 tests/           synthetic fixtures with hand-computed answers + real-data checks
 data/            raw/ interim/ processed/ (git-ignored) · manifests/ (committed)

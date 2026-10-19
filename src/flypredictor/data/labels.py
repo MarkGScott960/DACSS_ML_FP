@@ -103,6 +103,17 @@ def build_labels(
                 "events: build it with episodes.country_events(eps, rt, ert)"
             )
         plan.append((1, "row_breakdown", h1))
+    if lab.get("stage1_declaration_split", False) and stage1_event_type(cfg) == "declaration":
+        # H1b (decision D-07b): gradual vs abrupt declarations, scored with the H1 models.
+        n_decl = int((events["event"] == "declaration").sum())
+        n_split = int(events["event"].isin(["declaration_dem", "declaration_abrupt"]).sum())
+        if n_decl != n_split:
+            raise ValueError(
+                f"labels.stage1_declaration_split is on but {n_split} of {n_decl} declarations are split: "
+                "run episodes.split_declarations(ev, states) before build_labels"
+            )
+        for ev_type in ("declaration_dem", "declaration_abrupt"):
+            plan.append((1, ev_type, h1))
 
     st = states.sort_values(["country_id", "year"])
     if lab["stage1_event"] == "onset" and lab["onset_unconfirmed_rows"] == "drop":

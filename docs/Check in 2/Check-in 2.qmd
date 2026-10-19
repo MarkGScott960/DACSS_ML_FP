@@ -1,0 +1,469 @@
+---
+title: "Check-in 2: Data"
+subtitle: "Forecasting Democratic Backsliding with V-Dem and ERT"
+author: "Mark Scott"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+    code-fold: true
+    code-summary: "Show code"
+    code-tools: true
+    fig-format: svg
+jupyter: python3
+execute:
+  warning: false
+---
+
+```{python}
+#| label: setup
+#| code-summary: "Setup: load the configuration and the processed data"
+# All logic lives in the project package (src/flypredictor); this document only reads what the pipeline already produced (notebooks 01-04) and summarises it. Please see the Git REPO for the full code and data.
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import Markdown, display
+
+from flypredictor import Paths, load_config 
+from flypredictor.data.features import build_features, feature_columns, feature_specs
+
+pd.set_option("display.max_columns", 30)
+
+paths = Paths.from_root() # finds the repository root from this folder
+ROOT = paths.root
+cfg = load_config()
+
+panel = pd.read_parquet(ROOT / "data/processed/panel.parquet")
+labels = pd.read_parquet(ROOT / "data/processed/labels.parquet")
+episodes = pd.read_parquet(ROOT / "data/processed/democratic_episodes.parquet")
+label_counts = pd.read_csv(ROOT / "results/dev/audits/label_counts.csv")
+decl_timing = pd.read_csv(ROOT / "results/dev/audits/declaration_timing.csv")
+sim = pd.read_parquet(ROOT / "results/dev/power/sim_raw.parquet")
+
+DEV_LAST = cfg["splits"]["dev_last_origin"] # 2004
+LOCK_FIRST = cfg["splits"]["locked"]["first_origin"] # 2005
+LOCK_LAST = cfg["splits"]["locked"]["last_origin"] # 2024
+
+def period(year):
+    """Development (origins <= 2004), locked test (2005-2024), or 2025 (no outcome window yet)."""
+    return np.where(year <= DEV_LAST, "development",
+                    np.where(year <= LOCK_LAST, "locked test", "2025 (forecast only)"))
+
+# Stage-1 rows: democracies at risk of a backsliding episode (one row per country-year).
+stage1 = (labels.loc[labels["stage"] == 1, ["country_id", "year"]]
+          .drop_duplicates()
+          .merge(panel, on=["country_id", "year"], how="left"))
+stage1["period"] = period(stage1["year"])
+
+clean_cols = feature_columns(cfg, "clean")
+full_cols = feature_columns(cfg, "full")
+groups = cfg["features"]["groups"]
+clean_raw = [v for g in groups.values() if g["set"] == "clean" for v in g["vars"]]
+full_raw = [v for g in groups.values() if g["set"] in {"clean", "full"} for v in g["vars"]]
+
+# Palette (validated: CVD-safe categorical order); text stays in neutral ink.
+C = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
+INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e6e5e1"
+plt.rcParams.update({
+    "font.size": 10, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
+    "xtick.color": MUTED, "ytick.color": MUTED, "axes.spines.top": False,
+    "axes.spines.right": False, "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
+    "axes.axisbelow": True, "legend.frameon": False,
+})
+
+def tidy(df, precision=None, fmt=None):
+    """Styled table: text columns left-aligned, numbers right-aligned, no index."""
+    st = df.style.hide(axis="index")
+    if fmt:
+        st = st.format(fmt)
+    elif precision is not None:
+        st = st.format(precision=precision, subset=df.select_dtypes("number").columns)
+    text = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])]
+    num = [c for c in df.columns if c not in text]
+    st = st.set_properties(subset=text, **{"text-align": "left"})
+    st = st.set_properties(subset=num, **{"text-align": "right"})
+    return st.set_table_styles([{"selector": "th", "props": [("text-align", "left")]}])
+```
+
+# At a glance
+
+```{python}
+#| label: glance
+#| output: asis
+k1 = label_counts.query("event == 'declaration' and k == 1")
+dev_pos = int(k1.loc[k1.period == "development", "positives"].iloc[0])
+lock_pos = int(k1.loc[k1.period == "locked", "positives"].iloc[0])
+n_s1 = len(stage1)
+n_cty = stage1["country_id"].nunique()
+
+rows = [
+    ("Research question", "Can V-Dem warning signs forecast democratic backsliding, how quickly does that skill fade with the forecast horizon, and do Paxton's *leading* signs add anything beyond a democracy's own recent trajectory?"),
+    ("Dependent variable", "Binary: ERT recognises (in real time) that a democracy has entered an autocratization episode within *k* years, *k* ∈ {1, 2, 3, 5}"),
+    ("Unit of observation", "Country-year (forecast origin *t*)"),
+    ("Observations", f"{n_s1:,} democracy-years at risk ({n_cty} countries, 1900–2025), drawn from a {len(panel):,}-row country-year panel"),
+    ("Positive cases (*k* = 1)", f"{dev_pos} in development (≤ {DEV_LAST}), {lock_pos} in the locked test ({LOCK_FIRST}–{LOCK_LAST}); base rate 1–3%"),
+    ("Features", f"{len(clean_raw)} raw indicators → {len(clean_cols)} engineered columns (clean set); {len(full_raw)} → {len(full_cols)} (full set)"),
+    ("Key IVs", "Polarization (`v2cacamps`), judicial constraints (`v2x_jucon`, `v2juhcind`, `v2juhccomp`), legislative constraints (`v2xlg_legcon`), political violence (`v2caviol`), elite alignment (`v2regsupgroups*`)"),
+    ("Data", "V-Dem Country-Year v16 (features) and Episodes of Regime Transformation v16 (labels)"),
+]
+print("| | |\n|---|---|")
+for a, b in rows:
+    print(f"| **{a}** | {b} |")
+```
+
+```{=html}
+<style>#tbl-hypotheses td, #tbl-hypotheses th, #tbl-models td, #tbl-models th { text-align: left; }</style>
+```
+
+# Project idea
+
+I want to find out whether the erosion of democracy can be forecast, and if so, how far in advance. Robert Paxton describes fascism as a *process* with recognisable stages, and Levitsky and Ziblatt describe modern backsliding the same way: polarization, tolerance of political violence, attacks on courts, and the transfer of power from legislatures to executives. These accounts are mostly built after the fact. I want to test the warning signs *as forecasts*: train machine-learning models on a country-year panel of the world's democracies, and ask whether the signs flag backsliding before it is recognised.
+
+Two things make this an ML problem rather than a replication. First, it is scored as a true forecast: every model is trained only on what was knowable at the forecast year and is tested once, on a locked set of years it has never seen. Second, it is a model comparison: persistence and momentum baselines, penalised logistic regressions, gradient boosting, a recurrent network (GRU) and a stacked ensemble all compete on the same rows, with the same metrics.
+
+::: {.callout-note}
+## What changed since Check-in 1
+
+* **Dependent variable.** Check-in 1 proposed predicting the *start* of an episode. An episode's start year is only known in hindsight: ERT confirms an episode once the democracy index has fallen 0.10, a median of 2 years (and up to 10) after it began. The outcome is now the **real-time declaration** of an episode, which is observable the year it happens. This is what an early-warning system would act on.
+* **V-Party dropped.** It covers only 1970–2019 and 16% of democracy-years, and it ends before the test window does.
+* **GDP dropped.** V-Dem's GDP series ends in 2019, so it is unavailable for most of the test window.
+* **Hypotheses settled.** All hypotheses, the primary model (ridge logistic regression) and the tests are fixed below, before any model is fit to real outcomes.
+:::
+
+## Research question
+
+**Can V-Dem's warning signs forecast whether a democracy will enter a recognised backsliding episode within one to five years, and do Paxton's *leading* signs (polarization, violence, attacks on courts and legislatures, elite alignment) add forecasting skill beyond what the democracy's own recent decline already shows?** A secondary question is whether outright democratic breakdown is forecastable in the same way.
+
+# Data
+
+## Sources
+
+| Dataset | Role | Size | Notes |
+|---|---|---|---|
+| [V-Dem Country-Year v16](https://www.v-dem.net/data/the-v-dem-dataset/) (Full + Others) | Features | 28,092 rows × 4,618 columns (1789–2025) | Expert-coded indicators aggregated by a measurement model; measurement-model point estimates are used |
+| [Episodes of Regime Transformation (ERT) v16](https://github.com/vdeminstitute/ERT) | Labels | 19,857 country-years (1900–2025) | Built from V-Dem's Electoral Democracy Index (EDI). An episode is confirmed once the EDI has fallen a cumulative 0.10 |
+
+Both are pinned to a single commit of the ERT repository and checked against SHA-256 hashes, so a fresh download reproduces the same files byte for byte.
+
+## From raw data to modelling rows
+
+To label a row *in real time*, ERT's own episode-coding function was re-run on V-Dem cut off at every year from 1900 to 2025. Each country-year therefore carries the episode status ERT *would have assigned at that time*, not the status it assigned later with hindsight. A democracy is **at risk** (stage 1) if it is a democracy and is not already inside a recognised episode.
+
+```{python}
+#| label: tbl-funnel
+#| tbl-cap: "From the raw file to the rows the models use."
+funnel = pd.DataFrame([
+    ("V-Dem v16 country-year file", 28_092, None),
+    ("Country-years coded by ERT, 1900–2025 (the panel)", len(panel), panel["country_id"].nunique()),
+    ("… democracies (Regimes of the World ≥ 2 and ERT democracy)", int(panel["democracy"].sum()),
+     panel.loc[panel["democracy"], "country_id"].nunique()),
+    ("… at risk: not already in a recognised episode (stage 1)", n_s1, n_cty),
+] + [
+    (f"      {p}", int((stage1["period"] == p).sum()), stage1.loc[stage1["period"] == p, "country_id"].nunique())
+    for p in ["development", "locked test", "2025 (forecast only)"]
+], columns=["Step", "Rows", "Countries"])
+funnel["Step"] = funnel["Step"].str.replace("      ", "\u2003\u2003")
+funnel["Countries"] = funnel["Countries"].astype("Int64")
+tidy(funnel, fmt={"Rows": "{:,}", "Countries": lambda x: "" if pd.isna(x) else f"{x:,}"})
+```
+
+The 2025 rows have no outcome window yet. They are used only for the present-day risk map.
+
+## A look at the data
+
+**Features.** A random sample of six at-risk democracy-years, showing a few of the raw indicators. Most V-Dem indicators are on a latent (roughly standard-normal) scale; `v2x_` indices run from 0 to 1.
+
+```{python}
+#| label: tbl-sample-features
+#| tbl-cap: "Six at-risk democracy-years (features only)."
+show = ["country_name", "year", "v2cacamps", "v2caviol", "v2x_jucon",
+        "v2xlg_legcon", "v2regsupgroupssize", "v2x_polyarchy"]
+tidy(stage1.sample(6, random_state=756)[show].sort_values("year")
+           .rename(columns={"country_name": "country"}), fmt={c: "{:.3f}" for c in show[2:]})
+```
+
+Each indicator enters the models as its level, its 1-year change and its 3-year change, built only from years at or before the forecast year. For example, the polarization features for one country:
+
+```{python}
+#| label: tbl-engineered
+#| tbl-cap: "Engineered polarization features for the United States, 2018–2024."
+feats = build_features(panel, cfg)
+us = panel.loc[panel["country_name"] == "United States of America", "country_id"].iloc[0]
+cols = ["v2cacamps", "v2cacamps__d1", "v2cacamps__d3"]
+tidy(feats.loc[(feats["country_id"] == us) & feats["year"].between(2018, 2024), ["year"] + cols],
+     fmt={c: "{:.3f}" for c in cols})
+```
+
+**Labels.** Hungary shows how a real-time label works. ERT now dates Hungary's episode from 2006, but the decline only crossed the 0.10 confirmation threshold in 2013. A model forecasting from 2008 therefore counts as correct at *k* = 5 only if it flags the 2013 declaration. In the years 2006–2012 the slide is under way but not yet recognised, and these rows stay in the at-risk set.
+
+```{python}
+#| label: tbl-sample-labels
+#| tbl-cap: "Hungary's stage-1 labels (1 = an episode is declared within k years of the row's year)."
+hun = panel.loc[panel["country_name"] == "Hungary", "country_id"].iloc[0]
+lab = (labels.query("country_id == @hun and stage == 1 and event == 'declaration' and k <= 5")
+             .pivot_table(index="year", columns="k", values="y")
+             .loc[2004:]
+             .rename(columns=lambda k: f"k = {k}")
+             .astype(int)
+             .reset_index())
+tidy(lab)
+```
+
+Hungary leaves the at-risk set after 2012, once its episode has been recognised.
+
+# Dependent variable
+
+## Definition
+
+For each democracy at risk in year *t* and each horizon *k*:
+
+$$
+y(t, k) = \begin{cases} 1 & \text{if ERT first declares a democratic autocratization episode in years } t+1, \dots, t+k \\ 0 & \text{otherwise} \end{cases}
+$$
+
+* **Democratic episode**: an ERT autocratization episode that begins in a democracy (`aut_ep_prch == 1`). There are `{python} len(episodes)` such episodes since 1900.
+* **Declaration**: the first year ERT, run on data up to that year, codes the country as being in the episode.
+* **Horizons**: *k* ∈ {1, 2, 3, 5}; *k* = 10 is exploratory.
+* **Two splits of the outcome** used by secondary hypotheses:
+  * **Gradual** declarations, made while the country is still a democracy (executive aggrandizement), versus **abrupt** ones, made at or after a breakdown (coups and self-coups).
+  * **Breakdown**: the democracy becomes an autocracy within *k* years.
+
+## Counts and class imbalance
+
+```{python}
+#| label: tbl-dv
+#| tbl-cap: "Positive rows / rows (base rate) by outcome, horizon and period."
+names = {"declaration": "Declaration (primary, H1)", "declaration_dem": "… gradual (H1b)",
+         "declaration_abrupt": "… abrupt", "breakdown": "Breakdown (H5)"}
+lc = label_counts.query("horizon_set == 'confirmatory' and event in @names")
+lc = lc.assign(cell=lambda d: d.apply(lambda r: f"{r.positives:,} / {r.rows:,} ({r.base_rate:.1%})", axis=1),
+               Outcome=lambda d: d["event"].map(names),
+               period=lambda d: d["period"].str.replace("locked", "locked test"))
+tab = lc.pivot_table(index=["Outcome", "k"], columns="period", values="cell", aggfunc="first")
+tab = tab.reindex(pd.MultiIndex.from_product([list(names.values()), [1, 2, 3, 5]], names=["Outcome", "k"]))
+tab[["development", "locked test"]]
+```
+
+Three features of the outcome shape the whole design:
+
+1. **Severe class imbalance.** At *k* = 1 only 1–3% of rows are positive. Accuracy is meaningless here (predicting "no" for everything is 97–99% accurate), so the models are scored with PR-AUC relative to the base rate, Brier skill against a baseline, and log loss.
+2. **The base rate triples between the periods** (1.1% → 3.1% at *k* = 1). Models trained on the past will under-forecast the present unless they are recalibrated (see section 6).
+3. **The *kind* of event changes.** Before 2005 most recognised episodes are abrupt; after 2005 most are gradual (figure below). The models learn mostly from coups and are tested mostly on slow executive aggrandizement. Hypothesis H1b measures whether that transfer works.
+
+```{python}
+#| label: fig-declarations
+#| fig-cap: "Real-time declarations of democratic episodes by decade. Gradual = declared while the country was still a democracy; abrupt = declared at or after a breakdown. The locked test window starts in 2005; the 2020s run only to 2025."
+d = decl_timing.assign(decade=(decl_timing["year"] // 10) * 10,
+                       kind=np.where(decl_timing["still_democracy"], "Gradual", "Abrupt"))
+counts = d.pivot_table(index="decade", columns="kind", values="year", aggfunc="count", fill_value=0)
+counts = counts.reindex(range(1910, 2030, 10), fill_value=0)
+
+fig, ax = plt.subplots(figsize=(8, 3.4))
+x = np.arange(len(counts))
+w = 0.38
+for i, (kind, col) in enumerate([("Abrupt", C[1]), ("Gradual", C[0])]):
+    bars = ax.bar(x + (i - 0.5) * (w + 0.02), counts[kind], width=w, color=col, label=kind)
+    for b, v in zip(bars, counts[kind]):
+        if v >= 5:
+            ax.annotate(f"{v}", (b.get_x() + b.get_width() / 2, v), ha="center", va="bottom",
+                        fontsize=8, color=MUTED, xytext=(0, 2), textcoords="offset points")
+ax.set_xticks(x, [f"{dd}s" for dd in counts.index])
+ax.set_ylabel("Declarations")
+ax.legend(loc="upper left")
+ax.grid(axis="x", visible=False)
+plt.tight_layout()
+plt.show()
+```
+
+## Episode outcomes
+
+```{python}
+#| label: tbl-outcomes
+#| tbl-cap: "How the 101 democratic episodes ended (ERT v16)."
+out = (episodes["outcome_label"].value_counts().rename_axis("Outcome").reset_index(name="Episodes"))
+tidy(out)
+```
+
+Most recognised episodes end in breakdown. A related finding from the audits: **51 of the 71 breakdowns happen at or before the point where the episode could be recognised in real time**, 23 of them in the episode's first year. Many breakdowns arrive before the slide is visible, which is why breakdown is forecast from *all* democracies (H5) rather than only from those already in a recognised episode.
+
+# Features (independent variables)
+
+## Paxton's warning signs, grouped
+
+Features come in theory-driven groups. The key split is whether an indicator feeds the Electoral Democracy Index, the index the outcome is built from. Indicators inside the index are mechanically tied to the outcome, so they go only in the **full** set. The **clean** set contains no component of the index and nothing derived from it.
+
+```{python}
+#| label: tbl-groups
+#| tbl-cap: "Feature groups. Leading = Paxton warning signs; lagging = components of the outcome index; context = structural controls; trajectory = the outcome index itself."
+specs = pd.DataFrame([s.__dict__ for s in feature_specs(cfg)])
+n_eng = specs.groupby("group").size()
+gt = pd.DataFrame([
+    {"Group": name.replace("_", " ").capitalize(),
+     "Role": g["role"],
+     "Feature set": "clean + full" if g["set"] == "clean" else "full only",
+     "In EDI": "yes" if g.get("in_edi") else "no",
+     "Raw indicators": ", ".join(g["vars"]),
+     "Columns": int(n_eng.get(name, 0))}
+    for name, g in groups.items() if g["set"] in {"clean", "full"}
+])
+tidy(gt)
+```
+
+```{python}
+#| label: feature-counts
+#| output: asis
+print(f"**Totals.** Clean set: {len(clean_raw)} raw indicators → **{len(clean_cols)} columns**. "
+      f"Full set: {len(full_raw)} raw indicators → **{len(full_cols)} columns**. "
+      "At fit time each group also gets one missingness indicator, and every column is "
+      "median-imputed and standardised using training rows only.")
+```
+
+## Key independent variables and expectations
+
+* **Polarization (`v2cacamps`)**: society split into antagonistic camps. Expected to rise *before* backsliding: the literature describes polarization as what lets an executive attack institutions while keeping supporters.
+* **Courts (`v2x_jucon`, `v2juhcind`, `v2juhccomp`, `v2jureview`, `v2exrescon`)**: judicial constraints on the executive and compliance with courts. Expected to fall before the electoral side of democracy declines. Court capture is a classic early step.
+* **Legislative constraints (`v2xlg_legcon` and components)**: the legislature's ability to question and investigate the executive. Expected to fall early: Paxton's transfer of power from the legislature to the executive.
+* **Political violence (`v2caviol`, `v2clkill`)**: expected to matter mainly for abrupt events (coups) and at short horizons.
+* **Elite alignment (`v2regsupgroups*`)**: the size of the regime's support coalition, and whether business, military and party elites are part of it. A proxy for Paxton's elite collusion.
+* **The outcome's own trajectory (full set only)**: the EDI level, its 1- and 3-year change, and its decline from its 10-year peak. Expected to be the strongest single predictor at short horizons, through momentum. This is why the clean-versus-full comparison matters.
+
+## Univariate descriptives (clean indicators, at-risk rows)
+
+```{python}
+#| label: tbl-desc
+#| tbl-cap: "Raw clean indicators on the at-risk democracy-years. Missing shares are shown separately for the two periods."
+def miss(p, v):
+    s = stage1.loc[stage1["period"] == p, v]
+    return s.isna().mean()
+desc = pd.DataFrame({
+    "N": stage1[clean_raw].notna().sum(),
+    "Mean": stage1[clean_raw].mean(),
+    "SD": stage1[clean_raw].std(),
+    "Min": stage1[clean_raw].min(),
+    "Median": stage1[clean_raw].median(),
+    "Max": stage1[clean_raw].max(),
+    "% missing (dev.)": [miss("development", v) for v in clean_raw],
+    "% missing (test)": [miss("locked test", v) for v in clean_raw],
+})
+(desc.rename_axis("Indicator").reset_index().pipe(tidy).format({"N": "{:,.0f}", "Mean": "{:.2f}", "SD": "{:.2f}", "Min": "{:.2f}",
+                    "Median": "{:.2f}", "Max": "{:.2f}",
+                    "% missing (dev.)": "{:.1%}", "% missing (test)": "{:.1%}"}))
+```
+
+Coverage is nearly complete apart from coups. The coup series (Powell and Thyne) starts in 1950, so earlier years get a "pre-coverage" flag rather than imputed values. Imputing them would let the missingness flag act as a stand-in for the era.
+
+::: {.callout-important}
+## Why there are no plots of features against the outcome
+
+The pre-registration is not frozen yet, so nothing in this document relates a predictor to the outcome: no IV-by-DV plots, no correlations with the labels, no group means by outcome. Looking first would let me choose features or hypotheses that fit the data I have seen, and the forecasting test would no longer be clean. Everything above describes one variable at a time.
+:::
+
+# Hypotheses and how they will be tested
+
+## Confirmatory and estimation-only hypotheses
+
+**H1 is the only confirmatory hypothesis.** It gets a pass/fail verdict on the locked test. Every other hypothesis is **estimation only**: its effect is reported with a 95% interval and no verdict, because the power simulation (next section) shows the test set has too few events to give it a fair pass/fail test. Having a single confirmatory test also means no multiple-comparisons correction is needed.
+
+| ID | Hypothesis | How it is tested | Status |
+|---|---|---|---|
+| **H1** | The **clean** model (no EDI components) forecasts declarations better than the persistence baseline at *k* = 1 and *k* = 2. | On the locked test, at **both** horizons: Brier skill vs persistence > 0 **and** PR-AUC ÷ base rate above persistence's, each with its 95% country-clustered bootstrap interval excluding the baseline. *k* = 3 and 5 are scored the same way and reported as the horizon-decay curve. | **Confirmatory** |
+| **H1b** | The H1 models also forecast **gradual** declarations (executive aggrandizement), despite being trained mostly on abrupt ones. | Same models, scored only on gradual events (rows whose only event is abrupt are removed). Brier skill and PR-AUC ÷ base rate with 95% intervals, *k* ∈ {1, 2, 3, 5}. | Estimation |
+| **H2a** | Paxton's **leading** signs add skill to the **full** model at long horizons, beyond the outcome's own trajectory. | **Drop-group refit:** remove every leading group from the full model, refit with the same hyperparameters, and measure the change in log loss on the locked test (paired bootstrap interval), at *k* = 3 and 5. A positive change means the leading signs help. | Estimation |
+| **H2b** | Lagging groups (components of the outcome index) matter relatively more at short horizons. | Lagging drop-group change ÷ the sum of all group changes, *k* = 1 vs *k* = 5. Stated caveat: persistence alone predicts this pattern. | Descriptive |
+| **H3** | The *share* of skill that is mechanical (from the outcome's own components) shrinks as *k* grows. | (full − clean) ÷ (full − persistence) in Brier skill, at *k* = 1 vs *k* = 5, with a bootstrap interval on the difference. | Estimation |
+| **H4** | The H2a result holds across model classes. | Sign of the H2a change in ridge, gradient boosting and the GRU (elastic net and lasso also shown), each with an interval. | Estimation |
+| **H5** | Democratic **breakdown** is forecastable from all at-risk democracies. | Clean model vs persistence: Brier skill and PR-AUC ÷ base rate with 95% intervals. Headline at *k* = 1; *k* = 2, 3, 5 also reported. | Estimation |
+
+: All hypotheses, with the test each one gets. {#tbl-hypotheses tbl-colwidths="[7,31,48,14]"}
+
+**Exploratory analyses** (reported, never confirmatory): onset vs breakdown drivers; severity regression (how far the index falls); survival models for breakdown; a "kitchen-sink" model using every V-Dem indicator; a stacked ensemble; *k* = 10; an **out-of-era test** (would a model trained after 1945 have flagged Weimar Germany, Austria, Estonia and Spain?); a **vintage test** (how much V-Dem's later revisions help, comparing v10 with v16); external breakdown codings (LIED, Boix–Miller–Rosato); a reproduction of V-Dem's own V-Forecast benchmark; and error disparities by region and era.
+
+## Power: what the test set can detect
+
+The test set is small. Before deciding which hypotheses get a verdict, I ran a power simulation: **synthetic** outcomes with a planted warning-sign effect of known size (β, in log-odds per standard deviation), on the real panel structure, pushed through the real pipeline 200 times per effect size. β = 2 corresponds to a perfect-knowledge AUC of about 0.82, close to V-Forecast's published test AUC of 0.85.
+
+```{python}
+#| label: fig-power
+#| fig-cap: "Share of 200 simulated datasets in which each test passes, by planted effect size. The dashed line is the usual 80% power target. Panel 1 includes the confirmatory H1 rule (k = 1 and 2 must both pass)."
+s = sim[sim["beta_mech"] == 0.5]
+both = (s.query("task == 'H1' and k in [1, 2]")
+         .pivot_table(index=["beta", "rep"], columns="k", values="pass", aggfunc="first")
+         .astype(bool).all(axis=1).groupby("beta").mean())
+
+panels = [("H1 (declarations)", "H1"), ("H1b (gradual only)", "H1b"),
+          ("H2a (leading signs add skill)", "H2a"), ("H5 (breakdown)", "H5")]
+markers = {1: "o", 2: "s", 3: "^", 5: "D"}
+fig, axes = plt.subplots(2, 2, figsize=(9, 6.4), sharey=True, sharex=True)
+axes = axes.ravel()
+for ax, (title, task) in zip(axes, panels):
+    t = s[s["task"] == task]
+    for i, k in enumerate([1, 2, 3, 5]):
+        pk = t[t["k"] == k].groupby("beta")["pass"].mean()
+        if pk.empty:
+            continue
+        ax.plot(pk.index, pk.values, color=C[i], lw=2, marker=markers[k], ms=6, label=f"k = {k}")
+    if task == "H1":
+        ax.plot(both.index, both.values, color=INK, lw=2.5, ls="-", marker="*", ms=8,
+                label="k = 1 and 2 (rule)")
+    ax.axhline(0.8, color=MUTED, ls="--", lw=1)
+    ax.set_title(title, fontsize=10, color=INK, loc="left")
+    ax.set_xlim(-0.1, 3.1)
+for ax in axes[2:]:
+    ax.set_xlabel("Planted effect β (log-odds per SD)")
+for ax in axes[::2]:
+    ax.set_ylabel("Power")
+axes[0].set_ylim(-0.02, 1.05)
+handles, labs = axes[0].get_legend_handles_labels()
+fig.legend(handles, labs, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.02))
+plt.tight_layout(rect=(0, 0.05, 1, 1))
+plt.show()
+```
+
+```{python}
+#| label: power-summary
+#| output: asis
+print(f"The confirmatory H1 rule (*k* = 1 **and** *k* = 2 must both pass) has **{both.loc[2.0]:.1%} power at β = 2** "
+      f"and {both.loc[3.0]:.1%} at β = 3. Requiring all four horizons to pass would have dropped this to about one in three at β = 2, "
+      "so *k* = 3 and 5 are reported as a decay curve instead. H1b, H2a and H5 stay well below 80% at plausible effect sizes, which is why "
+      "they are estimation only. With no planted effect (β = 0) the tests pass in 0–3.5% of datasets, within simulation error of the "
+      "nominal 2.5%, so false positives are controlled. H1 is designed around an effect of about 0.06 Brier skill (β = 2), "
+      "where the rule has the power above; the strict 80% point falls between β = 2 and 3. If H1 fails, an effect that large "
+      "would have been caught about three times in four, so the result argues against effects of that size and says nothing "
+      "about smaller ones.")
+```
+
+## The machinery behind every test
+
+**Validation design.** Rows are split by **forecast year**, never at random. Random splits would let a model learn 2015 from 2016.
+
+* **Development (origins 1900–2004):** rolling-origin, expanding-window cross-validation. Seven 5-year validation blocks from 1970 to 2004, with a gap of *k* years between the last training label and the first validation year, so no training label overlaps the validation period. All tuning and model selection happen here.
+* **Locked test (origins 2005–2024):** scored **once**, after the code is frozen. For each test year the models are refit on every label known by then, with hyperparameters frozen from development. This mirrors how a warning system would run. A single model frozen at 2004 is reported as a sensitivity check. The code refuses to score the test set unless the pre-registration tag exists.
+* **Recalibration:** before each forecast, every model's predictions (the baseline's too) are shifted so their average matches the event rate of the last 10 known years. This corrects for the tripling of the base rate.
+
+**Models.**
+
+| Role | Models |
+|---|---|
+| Baselines | **Persistence** (the base rate within bins of regime subtype × recent EDI trend); **EDI-momentum logit** ("the slide predicts the slide") |
+| Primary | **Ridge logistic regression** (chosen because the power simulation showed it has the most power) |
+| Lineup | Lasso and elastic-net logistic regression; gradient boosting; kitchen-sink gradient boosting (every V-Dem indicator); GRU over each country's history; stacked ensemble |
+
+: The model lineup. {#tbl-models tbl-colwidths="[18,82]"}
+
+Every model gets the same tuning budget: 40 configurations per model class per horizon, chosen by log loss on the development folds. The GRU's best configuration is re-run with 5 random seeds. No class reweighting is used. The training population (all regimes, democracies plus electoral autocracies, or democracies only) is itself a tuned hyperparameter, but scoring is always on democracies.
+
+**Metrics.** PR-AUC ÷ base rate (primary; robust to the base-rate shift), Brier skill against persistence, log loss, ROC-AUC, calibration (reliability) plots, precision, recall and F1 when the top 10% of risk scores raise an alert, and an event-level hit rate that counts each episode once. All intervals come from a **country-clustered bootstrap** (2,000 resamples, with whole countries resampled, because a country's years are not independent).
+
+**Interpretation.** Drop-group refits (H2a–H4) rather than permutation importance, which understates correlated groups. SHAP values are used only for the demo.
+
+**Leakage gate before the code freeze.** A label-permutation placebo (models trained on shuffled outcomes must score no better than chance) and a planted-leak test (a deliberately leaked feature must be caught).
+
+# Next steps
+
+1. Freeze the pre-registration (git tag `prereg-v1`). The indicator codes have been checked against the V-Dem v16 codebook.
+2. Development runs: baselines → ridge, lasso and elastic net → gradient boosting → kitchen-sink → GRU → stacked ensemble.
+3. Leakage gate and code freeze; locked test scored once (planned for around November 20).
+4. Robustness suite, out-of-era panel (Weimar), present-day risk map, paper and talk.

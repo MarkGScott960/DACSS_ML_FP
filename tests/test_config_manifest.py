@@ -24,9 +24,11 @@ def test_full_contains_clean(base_cfg):
     assert "v2x_polyarchy" in full
 
 
-def test_party_vars_only_in_party_arm(base_cfg):
-    party_only = set(fconfig.feature_vars(base_cfg, "party")) - set(fconfig.feature_vars(base_cfg, "clean"))
-    assert party_only and not party_only & set(fconfig.feature_vars(base_cfg, "full"))
+def test_cut_variables_absent(base_cfg):
+    # Party arm cut (D-12b) and GDP dropped (D-17b): neither may come back silently.
+    every = set(fconfig.all_feature_vars(base_cfg))
+    assert not {"e_gdppc", "v2xpas_democracy_government", "v2xpas_exclusion_government"} & every
+    assert set(fconfig.feature_vars(base_cfg, "party")) == set(fconfig.feature_vars(base_cfg, "clean"))
 
 
 @pytest.mark.parametrize(

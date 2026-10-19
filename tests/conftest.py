@@ -118,6 +118,7 @@ def cfg(base_cfg):
     c["labels"]["maturity"]["stage2"]["default"] = 0
     c["labels"]["stage1_breakdown_target"] = True
     c["labels"]["stage1_row_breakdown_target"] = False   # switched on in tests/test_definitions.py
+    c["labels"]["stage1_declaration_split"] = False      # switched on in tests/test_features.py
     c["democracy"]["require_ert_democracy"] = True
     c["splits"] = {
         "dev_last_origin": 1999,

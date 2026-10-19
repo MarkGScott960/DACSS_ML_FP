@@ -7,7 +7,7 @@
 #   role:  leading | lagging | context | trajectory
 #   in_edi: true if the indicator feeds V-Dem's Electoral Democracy Index (v2x_polyarchy),
 #           i.e. is mechanically tied to the ERT outcome.
-#   verify: true = check the code / EDI membership against the v16 codebook before freezing.
+#   verify: all codes and EDI memberships checked against the V-Dem v16 codebook on 2026-10-19 (decision D-22b).
 #
 # Raw indicators only. Levels, 1-year and 3-year changes are built by
 # src/flypredictor/data/features.py (later zip), which reads this file.
@@ -41,7 +41,8 @@ groups:
     role: leading
     in_edi: false        # liberal component, not EDI
     vars: [v2xlg_legcon, v2lgqstexp, v2lginvstp, v2lgotovst, v2lgoppart]
-    verify: true
+    # Verified (codebook v16, 2.2.11): v2xlg_legcon = Bayesian factor analysis of exactly these four indicators.
+    # Feeds v2x_liberal, not v2x_polyarchy.
 
   elite_alignment:
     # Proxy for Paxton's elite collusion (plan 4.1, M8). Regime support groups:
@@ -51,15 +52,17 @@ groups:
     role: leading
     in_edi: false
     vars: [v2regsupgroupssize, v2regsupgroups_2, v2regsupgroups_3, v2regsupgroups_5]
-    verify: true         # confirm category numbering (_2 party elites, _3 business, _5 military) in the v16 codebook
+    # Verified (codebook v16, 3.5.1.7): _2 = party elites, _3 = business elites, _5 = the military.
+    # Shares of coders (0-1); missing where v2regint == 0 (interregnum).
 
   structural:
     set: clean
     role: context
     in_edi: false
-    vars: [e_gdppc, e_pt_coup, e_pt_coup_attempts]
+    # e_gdppc removed (decision D-17): the series ends in 2019, so any carry-forward feature is
+    # out of distribution in the locked window (2020-2024).
+    vars: [e_pt_coup, e_pt_coup_attempts]
     coverage_rules:
-      e_gdppc: carry_forward_with_age      # series ends 2019 (verified in V-Dem v16)
       e_pt_coup: structurally_missing_before_1950
       e_pt_coup_attempts: structurally_missing_before_1950
 
@@ -96,15 +99,8 @@ groups:
     in_edi: true
     vars: [v2x_regime]
 
-  party_system:
-    # Party-augmented arm (E12). V-Dem's own country-year party-system indices,
-    # aggregated from V-Party for governing parties: no separate V-Party merge needed.
-    # Coverage 1970-2019 only (verified in V-Dem v16).
-    set: party
-    role: leading
-    in_edi: false
-    vars: [v2xpas_democracy_government, v2xpas_exclusion_government]
-    verify: true
+  # party_system (v2xpas_democracy_government, v2xpas_exclusion_government) was cut (decision D-12):
+  # coverage 1970-2019, 16% of democracy-years, and it ends before the locked window does.
 
 # Identifiers and grouping variables carried into the panel but never used as predictors.
 id_vars: [country_id, country_text_id, country_name, year]

@@ -39,3 +39,34 @@ def test_labels_shape():
     obs = lab[lab["observable"]]
     assert (obs["year"] + obs["k"] <= cfg["years"]["last"]).all()
     assert not lab.duplicated(["country_id", "year", "stage", "k", "event"]).any()
+
+
+needs_panel = pytest.mark.skipif(not paths.panel_parquet.is_file(), reason="run notebooks/0x_data/02 first")
+
+
+@needs_panel
+def test_features_no_lookahead_real_panel():
+    from flypredictor.data import features
+
+    cfg = load_config()
+    panel = pd.read_parquet(paths.panel_parquet)
+    full = features.build_features(panel, cfg)
+    for T in (1975, 2004, 2015):
+        cut = features.build_features(panel[panel["year"] <= T], cfg)
+        pd.testing.assert_frame_equal(cut[cut["year"] == T].reset_index(drop=True),
+                                      full[full["year"] == T].reset_index(drop=True))
+
+
+@needs_processed
+def test_risk_set_and_declaration_split():
+    cfg = load_config()
+    st = pd.read_parquet(paths.states_parquet)
+    lab = pd.read_parquet(paths.labels_parquet)
+    if cfg["democracy"].get("require_ert_democracy"):
+        assert int((st["stage"] == 1).sum()) == 5031
+    if cfg["labels"].get("stage1_declaration_split"):
+        assert {"declaration_dem", "declaration_abrupt"} <= set(lab["event"]), "labels are stale: re-run notebook 02"
+        a = lab[(lab.event == "declaration") & lab.observable].set_index(["country_id", "year", "k"]).y
+        g = lab[(lab.event == "declaration_dem") & lab.observable].set_index(["country_id", "year", "k"]).y
+        b = lab[(lab.event == "declaration_abrupt") & lab.observable].set_index(["country_id", "year", "k"]).y
+        assert ((g | b) == a).all()                     # every declaration is gradual or abrupt

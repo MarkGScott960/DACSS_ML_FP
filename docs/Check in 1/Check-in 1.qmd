@@ -1,0 +1,40 @@
+---
+title: "Check-in 1"
+author: "Mark Scott"
+format: html
+---
+**Topic: Forecasting Democratic Backsliding**
+
+# Motivation and Relationships
+
+I want to investigate whether the erosion of democracy can be forecast, and if so, how far in advance. I aim to build on the foundations created by political scientists such as Robert Paxton. Paxton's account and theories of fascism as a process (along with Levitsky and Ziblatt in *How Democracies Die*[^1]) describe autocratization as a sequence with warning signs - polarization, political violence, attacks on courts, and power transfer from the legislature to the executive. Like many studies in political science, these effects are described retroactively, and I want to test these warning signs as a means of forecasting. I aim to train ML models on country-year panel data to predict whether a democracy can enter an autocratization episode within 1, 2, 3, or 5 years (I was aiming for longer horizons, but am limited by data), and measure how quickly forecasting power drops as the horizon grows. I also want to separate early warnings from simple momentum, meaning whether leading signs can add predictive information beyond what a country's
+*recent trajectory shows*. 
+
+
+## Variables
+
+**Likely Dependent Variable**:  A binary indicator whether a democracy begins an autocratization episode within $k$ years, using the Episodes of Regime Transformation (ERT)[^2] coding. An episode starts with a decline in V-Dem's Electoral Democracy Index[^3] and counts as one when the total cumulative decline reaches a threshold of 0.10. There are two secondary outcomes:
+
+1. Whether a democracy already in an episode breaks down within $k$ years.
+2. Severity, meaning the total decline in the democracy index over an episode. 
+
+**Independent variables** I expect political polarization (`v2cacamps`) and contraints on the executive from the courts tot be the strongest leading signals(e.g., `v2x_jucon`, `v2juhcind`, or `v2juhccomp`. The literature on modern backsliding describes elected executives who polarize the public and then capture or ignore the courts before elections are then themselves degraded. I also expect that the strongest predictor will democracy index's own recent trend. And because that variable is mechanically linked to the outcome, I will compare a 'clean' feature set that excludes every component of the democracy index against a 'full' feature set that includes them. I hope this will delineate how much of the forecasting power comes from warning signs, and how much comes from the outcome predicting itself.
+
+
+# Datasets
+
+1. V-Dem Country-Year dataset ,v16 (Full + Others)[^3] (*28092 rows $\times$ 4618 columns*)
+    + This will be the main feature source. It is a country-year panel covering about 200 countries from 1789 to 2025, with approximately 28,000 rows. V-Dem lists 532 expert-coded indicators, 251 indices, 62 indicators from other sources, and a multitude of other measures pertaining to the measurement model (e.g., standard deviations and alternative scales).
+    + Overall, the credibility is high. The data comes from the Varieties of Democracy Institute at the University of Gothenburg. Each country is rated by multiple experts, and a single measurement model aggregates and adjusts for their disagreement/bias. It is one of the most widely used datasets in comparative politics, and version 16 was released in March 2026. However, there is extensive non-random missing data, namely with measures starting and ending in certain years. Then there are two issues with how the data is constructed. (1) the raters are rating several indicators on the same survey, so their overall impression of decline can bleed into what are supposed to be independent indicators, and (2) V-Dem revises its historical estimates with each release, so the data does contain a certain measure of hindsight. 
+2. Episodes of Regime Transformation (ERT), v16 [^2] (*19857 rows $\times$ 42 columns*)
+    + This will serve as the outcome labels. ERT is built largely from V-Dem data and identifies start and end years of an episode, severity, and outcome. 
+    + Overall, the credibility is also high. It comes from the V-Dem Institute and uses transparent/published thresholds, and is used in several peer-reviewed works. However, onsets are rare, with only roughly 100 democratic onsets, which creates a large imbalance. Episodes are also confirmed only after the full decline has happened, so the most recent years may have unlabeled onsets. 
+3. V-Party v2 [^4] (*11898 rows $\times$ 384 columns*)
+    + This dataset will work as a supplement to my other data. It contains coded party-level measures, including anti-pluralism, populism, and encouragement of political violence across roughly 169 countries. These map closely to descriptions of fascist movements, and I will aggregate them to the country-year level as extra features.
+    + Like the other two data sets, I would say the credibility is also high. It was produced by the V-Dem Institute with the same expert-survey and measurement model approach. However, it also does have its flaws. It only covers 1970 to 2019, so it can't be used for the interwar period or the most recent years. Its unit is the party in a given election rather than the country-year, so I will aggregate to the country-year level. 
+    
+    
+[^1]:[*How Democracies Die*](https://psi424.cankaya.edu.tr/uploads/files/Levitsky%20%26%20Ziblatt%2C%20How%20Democracies%20Die_%20What%20History%20Reveals%20about%20Our%20Future%20%282019%20--%20Penguin%20Books%29.pdf)
+[^2]:[Episodes of Regime Transformation Github](https://github.com/vdeminstitute/ERT/tree/master)
+[^3]:[V-Dem Country-Year Dataset ,v16 (Full + Others)](https://www.v-dem.net/data/the-v-dem-dataset/)
+[^4]:[V-Dem Part Dataset](https://www.v-dem.net/data/v-party-dataset/)

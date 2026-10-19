@@ -193,3 +193,25 @@ def country_events(
     ev["year"] = ev["year"].astype("int64")
     ev["country_id"] = ev["country_id"].astype("int64")
     return ev.drop_duplicates().sort_values(["country_id", "year", "event"]).reset_index(drop=True)
+
+
+def split_declarations(events: pd.DataFrame, states: pd.DataFrame) -> pd.DataFrame:
+    """Add 'declaration_dem' / 'declaration_abrupt' events (decision D-07b, hypothesis H1b).
+
+    Each real-time 'declaration' is copied once more with a type that depends on the country's
+    state in the declaration year:
+
+    declaration_dem     still a democracy (stage 1 or 2): a gradual slide recognised while the
+                        democracy survives
+    declaration_abrupt  no longer a democracy (stage 0): first recognised at or after breakdown
+
+    The original 'declaration' rows are kept, so the H1 label is unchanged.
+    """
+    dec = events.loc[events["event"] == "declaration", ["country_id", "year"]]
+    st = states[["country_id", "year", "democracy"]]
+    m = dec.merge(st, on=["country_id", "year"], how="left", validate="one_to_one")
+    still = m["democracy"].fillna(False).astype(bool)
+    extra = m[["country_id", "year"]].assign(event=np.where(still, "declaration_dem", "declaration_abrupt"))
+    ev = pd.concat([events, extra], ignore_index=True)
+    ev["year"] = ev["year"].astype("int64")
+    return ev.drop_duplicates().sort_values(["country_id", "year", "event"]).reset_index(drop=True)

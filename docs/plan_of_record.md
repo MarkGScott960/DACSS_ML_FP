@@ -47,7 +47,7 @@ The project is **hypothesis-driven and ML-first**.
 ### 2.1 Confirmatory hypotheses
 
 These are scored once on the locked test set.
-- **Primary model:** elastic-net logistic regression is the pre-registered primary model for H1, H2, H3 and H5. H4 compares model classes.
+- **Primary model:** ~~elastic net~~ **ridge logistic regression** (D-20b, 2026-10-19). **Only H1 (at *k* ∈ {1, 2}) is confirmatory**; H1b, H2a, H2b, H3, H4 and H5 are estimation only. The pre-registration (section 2) supersedes the table below.
 - **Multiple comparisons:** Holm correction across H1 to H5.
 - **Intervals:** country-clustered bootstrap (resample countries).
 - **Thresholds:** the minimum effect worth reporting (δ) for each hypothesis is set from the power simulation (section 7.2) before the pre-registration is frozen.
@@ -237,7 +237,7 @@ Every model emits probabilities on the same scoring rows and is scored by the sa
 
 ### 6.2 Main lineup (stages 1 and 2)
 
-3. **Penalized logistic regression:** lasso, ridge and elastic net, with regime × feature interactions when the chosen training population is P1 or P2. **Elastic net is the confirmatory primary model.**
+3. **Penalized logistic regression:** lasso, ridge and elastic net, with regime × feature interactions when the chosen training population is P1 or P2. **Ridge is the confirmatory primary model (D-20b); the elastic net and lasso stay in the lineup.**
 4. **Gradient boosting** (LightGBM or XGBoost; small grid around sensible defaults).
 5. **GRU** over each country's history (stage 1) or each episode's history (stage 2). Use a small hidden size and strong regularization. Sequences are truncated at each fold's training cutoff, and the model is unidirectional only.
 6. **Kitchen-sink gradient boosting (E4):** all V-Dem indicators, with the same lag rules. This tests the theory-driven feature set against "throw everything in".

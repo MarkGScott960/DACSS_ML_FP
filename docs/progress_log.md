@@ -63,3 +63,63 @@ Chronology: what was done each session, and what was verified. Decisions go in `
 
 **Next.** Re-run notebooks 02 and 03, then `pytest`. Regenerate the lock file, commit zip 1, push `conflict-final`. Decide D-07a, D-08 and D-17 (D-07a after the power simulation) → zip 2.
 
+## 2026-10-09 (evening) · Decisions and zip 2: features, evaluation harness, power simulation
+
+**Decisions (Mark).** D-07b (H1 = any real-time declaration; new H1b on gradual declarations; annual refits in the locked window), D-08b (H5 = real-time breakdown on all democracies; conditional stage 2 exploratory), D-12b (party arm cut), D-17b (GDP dropped). Implementation choices open to override: D-18 (intercept updating), D-19 (power-simulation design).
+
+**Discipline.** No model has been fit to real outcomes. The plan puts development runs after the freeze, so the power simulation uses synthetic labels and reads only the `observable` column and the per-period event rates from the audits.
+
+**Built.**
+* `data/episodes.split_declarations` + labels `declaration_dem` / `declaration_abrupt` (H1b); notebook 02 updated.
+* `data/features.py`: levels, 1- and 3-year changes (missing across coding gaps), EDI decline from the 10-year peak, liberal flag, coup coverage rule (3-year count, pre-1950 indicator); `FeaturePreprocessor` (median imputation, group missingness flags, standardisation; training rows only). Clean 59 columns, full 115.
+* `eval/splits.py` (training cutoff t − 1 − k − lag; 7 development blocks 1970–2004; annual or frozen locked schedules; locked folds refused outside the lockbox), `eval/metrics.py` (tie-aware weighted AP matching scikit-learn, Brier skill, log loss, alerts, event-level hit rate), `eval/bootstrap.py` (country-clustered, paired), `eval/recalibration.py` (D-18), `eval/lockbox.py` (tag `prereg-v1`, unchanged `config/` and `prereg/` or a logged deviation, once-only ledger), `eval/power.py`.
+* `models/baselines.py` (persistence bins, EDI momentum), `models/linear.py` (elastic net, ridge).
+* `notebooks/0x_data/04_power.ipynb`.
+* Tests: 26 new (features, harness, lockbox on a temporary git repo, power helpers) plus 2 real-data checks (feature truncation on the real panel; declaration split).
+
+**Verified.**
+* 63 tests pass; the new real-data split check fails until notebook 02 is re-run (stale labels), as intended.
+* Feature truncation on the real panel (T = 1975, 2004, 2015): identical rows, so no look-ahead.
+* Notebook 04 runs end to end on a reduced grid (1 rep per scenario).
+
+**Findings while building the simulation.**
+* Under a planted effect of β = 1 (log-odds per SD of a leading-sign index), even the true probabilities reach only AUC ≈ 0.65–0.73 at *k* = 1; β = 2 gives ≈ 0.82–0.85.
+* The leading-sign index correlates 0.72 with the negative 3-year EDI change in the real panel.
+* Models trained on mostly low-rate history under-predict the locked window (mean forecast 1.5–2% vs 3%) → D-18.
+* Stand-in check (1 rep, β = 2): elastic net Brier skill ≥ ridge at *k* = 1–3, AP ratios similar → simulated power is conservative for the elastic net.
+
+**Next.** Mark: re-run 02 → 03 → `pytest` (all pass) → 04 full run (~30–60 min on 8 cores) → commit. Then fill δs, the H5 horizon and the H1b / H3 / H4 status in the pre-registration; check the `verify: true` items in `features.yaml` against the v16 codebook; tag `prereg-v1`. After the tag: the model zip (tuning on development folds, gradient boosting, GRU, kitchen-sink, stacking, drop-group refits).
+
+
+## 2026-10-10 · Power simulation speed-up
+
+* First full run of notebook 04 ran over an hour with no output: the run cell printed nothing until the end, and half of each simulated dataset's time went to pandas `fillna` in `FeaturePreprocessor`.
+* `FeaturePreprocessor` rewritten in numpy: identical output (max difference 4e-13 on the real panel), ~4x faster; a full simulated dataset now takes ~6 s on one core (was > 20 s).
+* `power.run` now runs one scenario at a time, prints its time and an ETA, and checkpoints each scenario to `results/dev/power/sim_parts/`; re-running resumes (checked: identical results). The run cell first times one dataset and prints an estimate.
+* 64 tests pass (including the real-data declaration-split check after the notebook 02 re-run).
+
+## 2026-10-10 · Power simulation results (notebook 04, 200 reps × 7 scenarios)
+
+Files: `results/dev/power/mde.csv`, `power_table.csv`, `stand_in_check.csv`. β = log-odds per SD of the planted leading-sign index; oracle AUC = AUC of the true probabilities at *k* = 1 (β = 1 → 0.68, 2 → 0.82, 3 → 0.91).
+
+* **Type-I error is controlled.** Pass rate with no signal: 0–1% for H1, H1b, H2a; 0–3.5% for H5 (within Monte Carlo error of 2.5%, SE ≈ 1.1%).
+* **H1, every k (as drafted):** 32% power at β = 2, 69% at β = 3. Never reaches 80%; *k* = 5 is the bottleneck (36% / 69%).
+* **H1 by horizon set (power at β = 2 / 3):** *k* = 1: 0.85 / 1.00; *k* = 2: 0.85 / 1.00; {1, 2}: 0.76 / 1.00; {1, 2, 3}: 0.67 / 0.97.
+* **H1b:** *k* = 1: 0.64 / 0.95; {1, 2}: 0.46 / 0.92.
+* **H2a:** *k* = 3: 0.62 / 0.98; *k* = 5: 0.22 / 0.46; both: 0.22 / 0.46.
+* **H5:** at best 0.26 / 0.47 (*k* = 1, about 8–11 locked positive rows); falls with *k*.
+* **Stand-in check (10 datasets, β = 2, frozen fit):** the elastic net with fixed settings (C = 0.1, l1_ratio = 0.5) passed less often than the ridge stand-in: in 28 paired cases ridge passed and the elastic net failed, never the reverse. **This corrects the earlier note** (from a single dataset) that the simulation is conservative for the elastic net: it is not, at these settings.
+* Proposed consequences: decision D-20 (pending).
+
+## 2026-10-19 · Pre-freeze decisions; Check-in 2
+
+**Decisions (Mark).** D-20b (ridge primary; H1 confirmatory at *k* ∈ {1, 2}; every other hypothesis estimation only; δ = minimum detectable effect, not a threshold), D-18b (intercept updating kept), D-21 (tuning budget 40 per class per horizon; GRU 5 seeds), D-23 (living docs back in `docs/`).
+
+**Still open before the freeze.** D-22: check the `verify: true` items in `features.yaml` against the V-Dem v16 codebook (Mark).
+
+**Done.** Pre-registration blanks filled (sections 2, 4, 7, 8); `config/project.yaml` gains a `confirmatory` and a `tuning` block; model docstrings updated to ridge primary; Check-in 2 drafted in `docs/Check in 2/` (Quarto, Jupyter engine, `.venv` kernel; reads `data/processed/` and the audit CSVs; no predictor-outcome relationships shown).
+
+**Codebook check (D-22b).** Passed against the V-Dem v16 codebook; `verify` flags removed from `features.yaml`.
+
+**Next.** Mark: commit → tag `prereg-v1` → push. Then the model zip.
+
