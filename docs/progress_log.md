@@ -121,5 +121,17 @@ Files: `results/dev/power/mde.csv`, `power_table.csv`, `stand_in_check.csv`. β 
 
 **Codebook check (D-22b).** Passed against the V-Dem v16 codebook; `verify` flags removed from `features.yaml`.
 
-**Next.** Mark: commit → tag `prereg-v1` → push. Then the model zip.
+**Training populations (D-24).** Built before the freeze: `ert_jobs.load_realtime` exposes any-episode status; `episodes.declarations_any` + event `declaration_any`; `states.pop_group`; stage-0 training rows in `labels.build_labels`; `labels.training_rows(labels, states, cfg, population, k)`; audit `definitions.population_counts` (notebook 03, A10; notebook 02 summary cell); config block `training_population`. 5 new fixture tests + 1 real-data test; 70 tests pass on the regenerated states and labels. Existing labels reproduced exactly (126,219 rows, identical `y` and `observable`).
+
+**Next.** Mark: re-run notebooks 02 → 03 → `pytest` → commit → tag `prereg-v1` → push. Then the development phase (`notebooks/1x_development`).
+
+## 2026-10-19 (evening) · Freeze: re-tag of `prereg-v1`
+
+* `prereg-v1` was first created at about 18:45 on commit `91618f6` ("Check 2 Complete"). That commit did not yet contain the D-24 work (training populations: `src/`, tests, `config/project.yaml` block, pre-registration §6 text, decisions log), which was still uncommitted.
+* The tag was deleted (locally and on GitHub) and re-created on the next commit, which contains the D-24 work. No development run, model fit or locked-test scoring happened between the two tags; nothing outcome-dependent had been looked at.
+* A stray local tag `prereg-vq` (typo, never pushed) was deleted.
+* 70 tests pass on the regenerated data (`pytest`, Mark's machine). `requirements-lock.txt` regenerated in UTF-8.
+* From here, any change to `config/` or `prereg/` is a logged deviation (pre-registration §10).
+
+**Next.** Development phase: `notebooks/1x_development`, starting with the baselines.
 

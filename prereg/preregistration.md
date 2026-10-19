@@ -76,7 +76,12 @@ All former blanks (⟨…⟩) are filled from `notebooks/0x_data/03_audits.ipynb
 
 - **Development folds:** rolling origin, expanding window. 5-year validation blocks over 1970–2004. Gap of *k* years between the last training label and the first validation origin.
 - **Locked test:** annual refits: for each origin *t* in 2005–2024, train on origins ≤ *t* − 1 − *k* − lag (lag = 0 for declarations, 5 for ERT breakdowns), hyperparameters frozen from development, intercept updating on the last 10 known years. Scored once, after code freeze and the leakage gate. **Sensitivity:** a single frozen fit on origins ≤ 2004 − *k* − lag.
-- **Training population:** P1 / P2 / P3, chosen per model class on development folds by log loss on democracy rows.
+- **Training population (D-06, D-24):** P1 / P2 / P3, chosen per model class on development folds by log loss on democracy rows. Scoring is always on stage-1 democracy rows.
+  - **P3** = democracy rows (stage 1). **P2** adds electoral autocracies; **P1** adds closed autocracies too. A non-democracy row is eligible if it is not inside an autocratization episode of any kind that ERT has already recognised in real time (`states.pop_group`); RoW-democracy rows that ERT codes as autocracies (D-15) count as electoral autocracies.
+  - **Labels:** democracy rows keep the H1 `declaration` label in every population. Added non-democracy rows are labelled `declaration_any`: ERT, re-run on data up to each year, first codes an autocratization episode of any kind (identified by country and start year) within *k* years. All 262 ERT episodes are recovered this way.
+  - **Regime group in the models:** linear models add electoral- and closed-autocracy indicators, each interacted with every feature; boosting and the GRU take the group as an input. Both are 0 on every scored row, so no EDI-derived information reaches a democracy's forecast.
+  - **Breakdown models (H5)** train on P3 only.
+  - **Sizes (development, *k* = 1):** P3 3,255 rows / 36 events; P2 6,573 / 141; P1 15,264 / 171 (`results/dev/audits/population_counts.csv`).
 
 ## 7 · Models and tuning
 

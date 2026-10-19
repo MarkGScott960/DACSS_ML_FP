@@ -5,27 +5,27 @@
   "files": [
     {
       "path": "data/processed/country_year_states.parquet",
-      "bytes": 16556,
-      "sha256": "3648dd3a1a03659c424266a98beb43ba7f549e137ddfe7b98af85316918a24b9",
-      "recorded_utc": "2026-10-10T12:55:48+00:00"
+      "bytes": 21300,
+      "sha256": "095b2bec4c647c6a3f274f507f0c023965b47e833bd0a291078c801ed6503ba5",
+      "recorded_utc": "2026-10-19T22:35:58+00:00"
     },
     {
       "path": "data/processed/democratic_episodes.parquet",
       "bytes": 23301,
       "sha256": "6719f57be612e5f9b8026e5ac1ece1fe5ac0df66e0db9b17279df0fa6c1df38c",
-      "recorded_utc": "2026-10-10T12:55:48+00:00"
+      "recorded_utc": "2026-10-19T22:35:58+00:00"
     },
     {
       "path": "data/processed/labels.parquet",
-      "bytes": 50001,
-      "sha256": "06e33a7a1fc85299d69b91c4166d7d5ef106d3f6a802705566b1254526306fb1",
-      "recorded_utc": "2026-10-10T12:55:48+00:00"
+      "bytes": 73299,
+      "sha256": "292ca110816c5977cc8155cda97066d62e1f6843f08d16e00a5eb74889b3b04d",
+      "recorded_utc": "2026-10-19T22:35:58+00:00"
     },
     {
       "path": "data/processed/panel.parquet",
       "bytes": 802133,
       "sha256": "2640d600ddb59a9dd34b52e5f7ac24469d63b235f7926b61119fd845b4fb58fa",
-      "recorded_utc": "2026-10-10T12:55:48+00:00"
+      "recorded_utc": "2026-10-19T22:35:58+00:00"
     }
   ]
 }

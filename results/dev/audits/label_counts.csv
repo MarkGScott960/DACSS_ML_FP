@@ -1,4 +1,14 @@
 stage,event,k,horizon_set,period,rows,positives,countries,base_rate
+0,declaration_any,1,confirmatory,development,12009,135,179,0.011241568823382463
+0,declaration_any,1,confirmatory,locked,1438,38,97,0.02642559109874826
+0,declaration_any,2,confirmatory,development,11992,264,179,0.022014676450967312
+0,declaration_any,2,confirmatory,locked,1378,72,97,0.05224963715529753
+0,declaration_any,3,confirmatory,development,11978,395,179,0.032977124728669226
+0,declaration_any,3,confirmatory,locked,1313,99,95,0.0753998476770754
+0,declaration_any,5,confirmatory,development,11952,641,179,0.05363119143239625
+0,declaration_any,5,confirmatory,locked,1183,143,93,0.12087912087912088
+0,declaration_any,10,exploratory,development,11899,1215,179,0.10210942095974451
+0,declaration_any,10,exploratory,locked,830,169,91,0.2036144578313253
 1,breakdown,1,confirmatory,development,3255,35,102,0.010752688172043012
 1,breakdown,1,confirmatory,locked,1323,13,108,0.009826152683295541
 1,breakdown,2,confirmatory,development,3255,72,102,0.022119815668202765

@@ -18,6 +18,18 @@ democratic, so rows outside them could never carry a positive label.
 
 Every democracy row belongs to exactly one of stage 1 or stage 2, so the two risk
 sets partition the democratic country-years.
+
+Training populations (plan 3.7, decision D-24). ``pop_group`` marks the rows a model may
+TRAIN on beyond stage 1; scoring is always on stage-1 rows:
+
+    democracy             stage-1 rows
+    electoral_autocracy   not a democracy, RoW >= 1, not in a known autocratization episode
+                          of any kind (includes RoW-democracy rows that ERT codes as autocracy, D-15)
+    closed_autocracy      RoW == 0, not in a known autocratization episode of any kind
+    (missing)             everything else: stage 2, or inside a known episode, or RoW missing
+
+P1 = all three groups, P2 = democracy + electoral_autocracy, P3 = democracy (config
+``training_population.candidates``). Needs ``state_source = ert_truncated``.
 """
 
 from __future__ import annotations
@@ -78,21 +90,38 @@ def assign_states(
     if source == "ert_truncated":
         if realtime is None:
             raise ValueError("state_source = ert_truncated needs the real-time ERT table (ert_jobs.load_realtime)")
-        rt = realtime[["country_id", "year", "rt_in_dem_episode", "rt_post_breakdown"]]
+        rt_cols = ["country_id", "year", "rt_in_dem_episode", "rt_post_breakdown"]
+        if "rt_in_any_episode" in realtime.columns:
+            rt_cols.append("rt_in_any_episode")
+        rt = realtime[rt_cols]
         base = base.merge(rt, on=["country_id", "year"], how="left", validate="one_to_one")
         missing = base["rt_in_dem_episode"].isna() & base["democracy"]
         if missing.any():
             yrs = sorted(base.loc[missing, "year"].unique())[:10]
             raise ValueError(f"real-time ERT status missing for democratic country-years, e.g. years {yrs}")
         in_ep = base["rt_in_dem_episode"].fillna(False).astype(bool) & ~base["rt_post_breakdown"].fillna(False).astype(bool)
+        in_any = base.pop("rt_in_any_episode").fillna(False).astype(bool) if "rt_in_any_episode" in base else None
         base = base.drop(columns=["rt_in_dem_episode", "rt_post_breakdown"])
     elif source == "rule":
         in_ep = pd.Series(_final_episode_flags(base, eps, "confirm_year_rule"), index=base.index)
     else:  # hindsight
         in_ep = pd.Series(_final_episode_flags(base, eps, "start_year"), index=base.index)
+    if source != "ert_truncated":
+        in_any = None
 
     base["in_known_episode"] = in_ep.to_numpy()
     base["stage"] = np.where(base["democracy"], np.where(base["in_known_episode"], 2, 1), 0).astype("int8")
+
+    # Training-population groups (decision D-24); only with the real-time any-episode status.
+    pop = pd.Series(pd.NA, index=base.index, dtype="string")
+    if in_any is not None:
+        base["in_known_any_episode"] = in_any.to_numpy()
+        regime = base["v2x_regime"]
+        free = (base["stage"] == 0) & ~base["in_known_any_episode"] & regime.notna()
+        pop[base["stage"] == 1] = "democracy"
+        pop[free & (regime >= 1)] = "electoral_autocracy"
+        pop[free & (regime == 0)] = "closed_autocracy"
+    base["pop_group"] = pop
 
     # Diagnostic: started (final coding) but not yet confirmed under the rule at t.
     started = _final_episode_flags(base, eps, "start_year")

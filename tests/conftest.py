@@ -11,7 +11,8 @@ Years 1990-2009. Five countries:
          Recovers, averted regression (outcome 4).
   D (4)  stable democracy with a coding gap: no rows for 1996 and 1997.
   E (5)  electoral autocracy with an autocratic-regression episode 2001-2003
-         (aut_ep_prch = 0, outcome 5): must NOT be a democratic episode.
+         (aut_ep_prch = 0, outcome 5): must NOT be a democratic episode. In real time
+         ERT first codes it in 2002 (training-population label 'declaration_any', D-24).
 """
 
 from __future__ import annotations
@@ -91,15 +92,22 @@ def make_ert() -> pd.DataFrame:
 
 
 def make_realtime() -> pd.DataFrame:
-    """Real-time status as ERT re-runs would give it: A known from 2002-2003, C in 1997."""
+    """Real-time status as ERT re-runs would give it: A known from 2002-2005, C in 1997, E 2002-2003.
+
+    ``rt_in_any_episode`` adds E's autocratic episode (not democratic) for the training populations.
+    """
     ert = make_ert()
     rt = ert[["country_id", "year"]].copy()
     rt["rt_in_dem_episode"] = False
     rt.loc[(rt.country_id == 1) & rt.year.between(2002, 2005), "rt_in_dem_episode"] = True
     rt.loc[(rt.country_id == 3) & (rt.year == 1997), "rt_in_dem_episode"] = True
     rt["rt_post_breakdown"] = (rt.country_id == 1) & (rt.year >= 2005)
+    rt["rt_in_any_episode"] = rt["rt_in_dem_episode"] | ((rt.country_id == 5) & rt.year.between(2002, 2003))
     rt["rt_episode_id"] = None
     rt["rt_start_year"] = np.nan
+    rt.loc[(rt.country_id == 1) & rt.year.between(2002, 2005), "rt_start_year"] = 2000
+    rt.loc[(rt.country_id == 3) & (rt.year == 1997), "rt_start_year"] = 1995
+    rt.loc[(rt.country_id == 5) & rt.year.between(2002, 2003), "rt_start_year"] = 2001
     return rt
 
 
@@ -119,6 +127,7 @@ def cfg(base_cfg):
     c["labels"]["stage1_breakdown_target"] = True
     c["labels"]["stage1_row_breakdown_target"] = False   # switched on in tests/test_definitions.py
     c["labels"]["stage1_declaration_split"] = False      # switched on in tests/test_features.py
+    c["training_population"]["enabled"] = False           # switched on in tests/test_labels.py (D-24)
     c["democracy"]["require_ert_democracy"] = True
     c["splits"] = {
         "dev_last_origin": 1999,

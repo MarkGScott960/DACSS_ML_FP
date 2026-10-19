@@ -12,6 +12,10 @@ Event types (from ``episodes.country_events``):
     stage 2:                               'breakdown'
     optional stage-1 targets:              'breakdown' (stage1_breakdown_target),
                                            'row_breakdown' (stage1_row_breakdown_target; sensitivity)
+    training populations (D-24):           'declaration_any' on stage-0 rows with a ``pop_group``
+                                           (non-democracies; stage = 0 in the label table). P1/P2 train
+                                           on these rows PLUS the stage-1 'declaration' rows, so every
+                                           democracy row has the same label in P1, P2 and P3.
 
 A label is **observable** only if (a) every year t+1 .. t+k exists for the country in
 the data (no gap, the country still exists) and (b) t + k <= last_year - maturity buffer.
@@ -80,7 +84,8 @@ def build_labels(
     """Long label table: one row per (country, origin year, stage, horizon).
 
     Columns: country_id, year (origin t), stage, k, horizon_set, event, y, observable.
-    Only stage-1 and stage-2 rows are emitted; with stage1_event = onset and
+    Stage-1 and stage-2 rows are emitted, plus (with ``training_population.enabled``) stage-0
+    training rows for P1/P2 with event 'declaration_any'. With stage1_event = onset and
     onset_unconfirmed_rows = drop, stage-1 rows inside a started-but-unconfirmed final episode are removed.
     """
     lab = cfg["labels"]
@@ -115,6 +120,17 @@ def build_labels(
         for ev_type in ("declaration_dem", "declaration_abrupt"):
             plan.append((1, ev_type, h1))
 
+    tp = cfg.get("training_population", {}) or {}
+    if tp.get("enabled", False):
+        if not (events["event"] == "declaration_any").any():
+            raise ValueError(
+                "training_population.enabled is on but the event table has no 'declaration_any' events: "
+                "load the real-time table with ert_jobs.load_realtime and rebuild episodes.country_events"
+            )
+        if "pop_group" not in states or states["pop_group"].isna().all():
+            raise ValueError("training_population.enabled needs states with pop_group (state_source = ert_truncated)")
+        plan.append((0, "declaration_any", h1))
+
     st = states.sort_values(["country_id", "year"])
     if lab["stage1_event"] == "onset" and lab["onset_unconfirmed_rows"] == "drop":
         st = st[~((st["stage"] == 1) & st["in_unconfirmed_final_episode"])]
@@ -126,7 +142,10 @@ def build_labels(
         # Breakdown labels need the breakdown-confirmation buffer whichever stage they are scored on.
         buffer = maturity_buffer(cfg, 2 if ev_type == "breakdown" else stage, buffer_override.get(stage))
         for cid, g in states.groupby("country_id", sort=True):
-            origins = st.loc[(st["country_id"] == cid) & (st["stage"] == stage), "year"].to_numpy()
+            rows = (st["country_id"] == cid) & (st["stage"] == stage)
+            if stage == 0:  # training-population rows only (decision D-24)
+                rows &= st["pop_group"].notna()
+            origins = st.loc[rows, "year"].to_numpy()
             if len(origins) == 0:
                 continue
             grid = np.arange(int(g["year"].min()), int(g["year"].max()) + 1)
@@ -154,6 +173,35 @@ def build_labels(
     labels["stage"] = labels["stage"].astype("int8")
     labels["k"] = labels["k"].astype("int8")
     return labels.sort_values(["stage", "k", "country_id", "year"]).reset_index(drop=True)
+
+
+def training_rows(
+    labels: pd.DataFrame, states: pd.DataFrame, cfg: dict[str, Any], population: str, k: int
+) -> pd.DataFrame:
+    """Observable TRAINING rows of one training population at horizon k (decision D-24).
+
+    Democracy rows (stage 1) always carry the H1 label ``training_population.democracy_event``,
+    so they are identical in every population. P1/P2 add non-democracy rows (stage 0) whose
+    ``pop_group`` is in the population, labelled ``training_population.event``. Scoring rows are
+    never taken from here: they are the stage-1 rows of the scored event.
+
+    Columns: country_id, year, stage, k, event, y, pop_group (sorted by country and year).
+    Callers still apply the fold's training cutoff (``eval.splits``).
+    """
+    tp = cfg["training_population"]
+    members = set(tp["candidates"][population])
+    base = labels[(labels["k"] == k) & labels["observable"]]
+    dem = base[(base["stage"] == 1) & (base["event"] == tp["democracy_event"])].assign(pop_group="democracy")
+    parts = [dem]
+    extra = members - {"democracy"}
+    if extra:
+        nd = base[(base["stage"] == 0) & (base["event"] == tp["event"])]
+        nd = nd.merge(states[["country_id", "year", "pop_group"]], on=["country_id", "year"], how="left", validate="one_to_one")
+        parts.append(nd[nd["pop_group"].isin(extra)])
+    cols = ["country_id", "year", "stage", "k", "event", "y", "pop_group"]
+    out = pd.concat([p[cols] for p in parts], ignore_index=True)
+    out["pop_group"] = out["pop_group"].astype(str)
+    return out.sort_values(["country_id", "year"]).reset_index(drop=True)
 
 
 def label_summary(labels: pd.DataFrame, cfg: dict[str, Any]) -> pd.DataFrame:

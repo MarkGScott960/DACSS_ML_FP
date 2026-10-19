@@ -34,7 +34,8 @@ def test_states_partition_democracies():
 def test_labels_shape():
     cfg = load_config()
     lab = pd.read_parquet(paths.labels_parquet)
-    assert set(lab["stage"]) == {1, 2}
+    expected = {0, 1, 2} if cfg.get("training_population", {}).get("enabled") else {1, 2}
+    assert set(lab["stage"]) == expected, "labels are stale: re-run notebook 02"
     assert set(lab.loc[lab["stage"] == 2, "k"]) == set(cfg["labels"]["horizons_stage2"])
     obs = lab[lab["observable"]]
     assert (obs["year"] + obs["k"] <= cfg["years"]["last"]).all()
@@ -70,3 +71,21 @@ def test_risk_set_and_declaration_split():
         g = lab[(lab.event == "declaration_dem") & lab.observable].set_index(["country_id", "year", "k"]).y
         b = lab[(lab.event == "declaration_abrupt") & lab.observable].set_index(["country_id", "year", "k"]).y
         assert ((g | b) == a).all()                     # every declaration is gradual or abrupt
+
+
+@needs_processed
+def test_training_populations():
+    """Decision D-24: P1/P2 rows exist, democracy rows are untouched, groups nest."""
+    cfg = load_config()
+    if not cfg.get("training_population", {}).get("enabled"):
+        pytest.skip("training populations disabled")
+    from flypredictor.data import labels as L
+
+    st = pd.read_parquet(paths.states_parquet)
+    lab = pd.read_parquet(paths.labels_parquet)
+    assert "pop_group" in st, "states are stale: re-run notebook 02"
+    assert int((st["pop_group"] == "democracy").sum()) == int((st["stage"] == 1).sum()) == 5031
+    assert set(lab.loc[lab["stage"] == 0, "event"]) == {"declaration_any"}
+    n = {p: len(L.training_rows(lab, st, cfg, p, 1)) for p in ("P1", "P2", "P3")}
+    assert n["P3"] < n["P2"] < n["P1"]
+    assert n["P1"] > 10_000

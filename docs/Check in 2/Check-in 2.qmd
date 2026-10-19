@@ -105,7 +105,7 @@ rows = [
     ("Unit of observation", "Country-year (forecast origin *t*)"),
     ("Observations", f"{n_s1:,} democracy-years at risk ({n_cty} countries, 1900–2025), drawn from a {len(panel):,}-row country-year panel"),
     ("Positive cases (*k* = 1)", f"{dev_pos} in development (≤ {DEV_LAST}), {lock_pos} in the locked test ({LOCK_FIRST}–{LOCK_LAST}); base rate 1–3%"),
-    ("Features", f"{len(clean_raw)} raw indicators → {len(clean_cols)} engineered columns (clean set); {len(full_raw)} → {len(full_cols)} (full set)"),
+    ("Features", f"{len(clean_raw)} raw indicators $\rightarrow$ {len(clean_cols)} engineered columns (clean set); {len(full_raw)} $\rightarrow$ {len(full_cols)} (full set)"),
     ("Key IVs", "Polarization (`v2cacamps`), judicial constraints (`v2x_jucon`, `v2juhcind`, `v2juhccomp`), legislative constraints (`v2xlg_legcon`), political violence (`v2caviol`), elite alignment (`v2regsupgroups*`)"),
     ("Data", "V-Dem Country-Year v16 (features) and Episodes of Regime Transformation v16 (labels)"),
 ]
@@ -250,7 +250,7 @@ tab[["development", "locked test"]]
 Three features of the outcome shape the whole design:
 
 1. **Severe class imbalance.** At *k* = 1 only 1–3% of rows are positive. Accuracy is meaningless here (predicting "no" for everything is 97–99% accurate), so the models are scored with PR-AUC relative to the base rate, Brier skill against a baseline, and log loss.
-2. **The base rate triples between the periods** (1.1% → 3.1% at *k* = 1). Models trained on the past will under-forecast the present unless they are recalibrated (see section 6).
+2. **The base rate triples between the periods** (1.1% $\rightarrow$ 3.1% at *k* = 1). Models trained on the past will under-forecast the present unless they are recalibrated (see section 6).
 3. **The *kind* of event changes.** Before 2005 most recognised episodes are abrupt; after 2005 most are gradual (figure below). The models learn mostly from coups and are tested mostly on slow executive aggrandizement. Hypothesis H1b measures whether that transfer works.
 
 ```{python}
@@ -315,8 +315,8 @@ tidy(gt)
 ```{python}
 #| label: feature-counts
 #| output: asis
-print(f"**Totals.** Clean set: {len(clean_raw)} raw indicators → **{len(clean_cols)} columns**. "
-      f"Full set: {len(full_raw)} raw indicators → **{len(full_cols)} columns**. "
+print(f"**Totals.** Clean set: {len(clean_raw)} raw indicators $\rightarrow$ **{len(clean_cols)} columns**. "
+      f"Full set: {len(full_raw)} raw indicators $\rightarrow$ **{len(full_cols)} columns**. "
       "At fit time each group also gets one missingness indicator, and every column is "
       "median-imputed and standardised using training rows only.")
 ```
@@ -453,7 +453,7 @@ print(f"The confirmatory H1 rule (*k* = 1 **and** *k* = 2 must both pass) has **
 
 : The model lineup. {#tbl-models tbl-colwidths="[18,82]"}
 
-Every model gets the same tuning budget: 40 configurations per model class per horizon, chosen by log loss on the development folds. The GRU's best configuration is re-run with 5 random seeds. No class reweighting is used. The training population (all regimes, democracies plus electoral autocracies, or democracies only) is itself a tuned hyperparameter, but scoring is always on democracies.
+Every model gets the same tuning budget: 40 configurations per model class per horizon, chosen by log loss on the development folds. The GRU's best configuration is re-run with 5 random seeds. No class reweighting is used. The training population is itself a tuned hyperparameter: democracies only (3,255 development rows, 36 events at *k* = 1), plus electoral autocracies (6,573 rows, 141 events), or all regimes (15,264 rows, 171 events). Autocracies are labelled by whether ERT recognises any autocratization episode. Scoring is always on democracies.
 
 **Metrics.** PR-AUC ÷ base rate (primary; robust to the base-rate shift), Brier skill against persistence, log loss, ROC-AUC, calibration (reliability) plots, precision, recall and F1 when the top 10% of risk scores raise an alert, and an event-level hit rate that counts each episode once. All intervals come from a **country-clustered bootstrap** (2,000 resamples, with whole countries resampled, because a country's years are not independent).
 
@@ -464,6 +464,6 @@ Every model gets the same tuning budget: 40 configurations per model class per h
 # Next steps
 
 1. Freeze the pre-registration (git tag `prereg-v1`). The indicator codes have been checked against the V-Dem v16 codebook.
-2. Development runs: baselines → ridge, lasso and elastic net → gradient boosting → kitchen-sink → GRU → stacked ensemble.
+2. Development runs: baselines $\rightarrow$ ridge, lasso and elastic net $\rightarrow$ gradient boosting $\rightarrow$ kitchen-sink $\rightarrow$ GRU $\rightarrow$ stacked ensemble.
 3. Leakage gate and code freeze; locked test scored once (planned for around November 20).
 4. Robustness suite, out-of-era panel (Weimar), present-day risk map, paper and talk.

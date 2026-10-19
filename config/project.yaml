@@ -115,6 +115,30 @@ labels:
     stage2: {default: 5, sensitivity: [3, 7]}
 
 # ---------------------------------------------------------------------------
+# Training population (plan 3.7; decisions D-06, D-24). A hyperparameter: each model class
+# picks P1, P2 or P3 on the development folds by log loss on DEMOCRACY rows. Scoring is
+# always on stage-1 democracy rows with the H1 'declaration' label.
+#   Democracy rows keep the H1 'declaration' label in every population. P1/P2 ADD non-democracy
+#   rows (states.pop_group; not inside a real-time known episode of any kind) labelled
+#   'declaration_any' = ERT (real time) first codes an autocratization episode of any kind within
+#   k years. (On democracy rows the two labels differ in one country-year, North Macedonia 1998,
+#   which is why democracy rows keep 'declaration'.)
+#   Linear models add regime-group indicators x features; boosting and the GRU get the group as
+#   an input. Both are always 0 for the democracy rows that are scored.
+#   Breakdown models (H5) train on P3 only: an autocracy cannot have a democratic breakdown.
+# ---------------------------------------------------------------------------
+training_population:
+  enabled: true
+  democracy_event: declaration          # label on democracy rows (identical in P1-P3)
+  event: declaration_any                # label on the added non-democracy rows
+  candidates:
+    P1: [democracy, electoral_autocracy, closed_autocracy]
+    P2: [democracy, electoral_autocracy]
+    P3: [democracy]
+  applies_to_events: [declaration]     # H1, H1b (scored on its subset), H2a, H2b, H3, H4
+  breakdown_population: P3
+
+# ---------------------------------------------------------------------------
 # Splits (plan 7.1). Years are FORECAST ORIGINS.
 # ---------------------------------------------------------------------------
 splits:

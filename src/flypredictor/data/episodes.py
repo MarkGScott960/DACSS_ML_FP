@@ -171,6 +171,10 @@ def country_events(
     row_breakdown     any RoW change from democracy to autocracy (``row_regch_event == -1``),
                       whether or not ERT codes a democratic episode; needs ``ert``.
                       Sensitivity outcome (decision D-15).
+    declaration_any   ERT, re-run on data truncated at year T, first codes an autocratization
+                      episode of ANY kind (any starting regime) for the country: the first T at which
+                      the episode (country, start year) appears. Training label for populations
+                      P1/P2 (decision D-24); needs ``realtime`` with ``rt_in_any_episode``.
     """
     frames = [
         eps[["country_id", "start_year"]].rename(columns={"start_year": "year"}).assign(event="onset"),
@@ -186,13 +190,31 @@ def country_events(
         prev_year = rt.groupby("country_id")["year"].shift(1)
         flips = rt[(rt["rt_in_dem_episode"]) & (prev == False) & (prev_year == rt["year"] - 1)]  # noqa: E712
         frames.append(flips[["country_id", "year"]].assign(event="declaration"))
+        if "rt_in_any_episode" in rt.columns:
+            frames.append(declarations_any(rt).assign(event="declaration_any"))
     if ert is not None:
         rb = ert.loc[ert["row_regch_event"] == -1, ["country_id", "year"]]
         frames.append(rb.assign(event="row_breakdown"))
-    ev = pd.concat(frames, ignore_index=True)
+    ev = pd.concat(frames, ignore_index=True)[["country_id", "year", "event"]]
     ev["year"] = ev["year"].astype("int64")
     ev["country_id"] = ev["country_id"].astype("int64")
     return ev.drop_duplicates().sort_values(["country_id", "year", "event"]).reset_index(drop=True)
+
+
+def declarations_any(realtime: pd.DataFrame) -> pd.DataFrame:
+    """Real-time declaration year of every autocratization episode, any regime (decision D-24).
+
+    An episode is identified by (country, start year); its declaration year is the first
+    truncation year T at which ERT, run on data up to T, codes the country as inside it.
+    Returns columns country_id, year (= declaration year), start_year.
+    """
+    rt = realtime.loc[realtime["rt_in_any_episode"].astype(bool), ["country_id", "year", "rt_start_year"]]
+    if rt["rt_start_year"].isna().any():
+        raise ValueError("real-time rows inside an episode without a start year")
+    d = (rt.groupby(["country_id", "rt_start_year"], as_index=False)["year"].min()
+           .rename(columns={"rt_start_year": "start_year"}))
+    d["start_year"] = d["start_year"].astype("int64")
+    return d[["country_id", "year", "start_year"]]
 
 
 def split_declarations(events: pd.DataFrame, states: pd.DataFrame) -> pd.DataFrame:

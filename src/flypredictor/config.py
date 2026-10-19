@@ -46,6 +46,16 @@ def validate(cfg: dict[str, Any]) -> None:
     sp = cfg["splits"]
     if not sp["dev_last_origin"] < sp["locked"]["first_origin"] <= sp["locked"]["last_origin"]:
         raise ValueError("splits: dev_last_origin < locked.first_origin <= locked.last_origin is required")
+    tp = cfg.get("training_population")
+    if tp and tp.get("enabled"):
+        groups = {"democracy", "electoral_autocracy", "closed_autocracy"}
+        for name, members in tp["candidates"].items():
+            if "democracy" not in members or not set(members) <= groups:
+                raise ValueError(f"training_population.candidates.{name} must contain 'democracy' and only {sorted(groups)}")
+        if tp["breakdown_population"] not in tp["candidates"]:
+            raise ValueError("training_population.breakdown_population must name one of the candidates")
+        if lab["state_source"] != "ert_truncated":
+            raise ValueError("training_population needs labels.state_source = ert_truncated (real-time status for all regimes)")
     for name, grp in cfg["features"]["groups"].items():
         if grp["set"] not in VALID_SETS:
             raise ValueError(f"features.groups.{name}.set must be one of {sorted(VALID_SETS)}")

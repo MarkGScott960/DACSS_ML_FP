@@ -5,5 +5,6 @@ coverage   first/last year and non-missing share per variable; missingness by de
            missingness flags that act as a proxy for time (era-proxy check)
 maturity   episode recount, start->confirmation and breakdown->confirmation lags (sets buffers)
 realtime   agreement between state sources (ERT re-runs vs rule vs hindsight)
-definitions RoW vs ERT regime type in the risk sets; RoW transitions ERT does not count as breakdowns
+definitions RoW vs ERT regime type in the risk sets; RoW transitions ERT does not count as breakdowns;
+           training-population sizes and events (D-24)
 """

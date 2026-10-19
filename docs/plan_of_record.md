@@ -153,6 +153,8 @@ The course's 10,000-row minimum is met by V-Dem itself (about 28,000 country-yea
 
 Each model class picks among P1 to P3 on development folds, by log loss **on democracy rows only**, before the lock. Scoring is always on democracy at-risk rows. The losing populations are reported as robustness.
 
+**Implemented (D-24, 2026-10-19).** Democracy rows keep the H1 label in every population; P1/P2 add non-democracy rows outside any real-time known episode, labelled by the real-time declaration of an autocratization episode of any kind. Breakdown models train on P3 only. Exact definition: pre-registration §6.
+
 ## 4. Features
 
 ### 4.1 Paxton groups and the clean/full split

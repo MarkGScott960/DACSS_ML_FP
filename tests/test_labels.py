@@ -117,3 +117,74 @@ def test_label_summary_periods(ert, cfg):
     s = labels.label_summary(lab, cfg)
     assert set(s["period"]) <= {"development", "locked", "after_locked"}
     assert (s["positives"] <= s["rows"]).all()
+
+
+# ---------------------------------------------------------------------------
+# Training populations P1-P3 (decision D-24)
+# ---------------------------------------------------------------------------
+
+def _build_pop(ert, cfg, realtime):
+    cfg["labels"]["state_source"] = "ert_truncated"
+    cfg["training_population"]["enabled"] = True
+    eps = episodes.democratic_episodes(ert, cfg)
+    ev = episodes.country_events(eps, realtime)
+    st = states.assign_states(ert, eps, cfg, realtime)
+    return st, ev, labels.build_labels(st, ev, cfg)
+
+
+def test_declarations_any(realtime):
+    d = episodes.declarations_any(realtime).set_index("country_id")
+    assert d.loc[1, "year"] == 2002 and d.loc[1, "start_year"] == 2000   # A: same as its declaration
+    assert d.loc[3, "year"] == 1997
+    assert d.loc[5, "year"] == 2002 and d.loc[5, "start_year"] == 2001   # E: autocratic episode
+    assert len(d) == 3
+
+
+def test_population_groups(ert, cfg, realtime):
+    st, _, _ = _build_pop(ert, cfg, realtime)
+    g = st.set_index(["country_id", "year"])["pop_group"]
+    assert g[(2, 1995)] == "democracy"
+    assert g[(5, 2000)] == "electoral_autocracy"
+    assert g[(5, 2004)] == "electoral_autocracy"
+    assert g.isna()[(5, 2002)] and g.isna()[(5, 2003)]    # inside E's known episode: not at risk
+    assert g.isna()[(1, 2002)]                              # stage 2 is never a training row here
+    assert g.isna()[(1, 2004)] and g.isna()[(1, 2005)]    # autocracy, still in A's known episode
+    assert g[(1, 2006)] == "electoral_autocracy"
+    # every stage-1 row is 'democracy' and nothing else is
+    assert (st.loc[st["stage"] == 1, "pop_group"] == "democracy").all()
+    assert not (st.loc[st["stage"] != 1, "pop_group"] == "democracy").any()
+
+
+def test_declaration_any_labels(ert, cfg, realtime):
+    _, _, lab = _build_pop(ert, cfg, realtime)
+    assert _y(lab, 5, 2001, 0, 1, "declaration_any") == (1, True)   # E declared in 2002
+    assert _y(lab, 5, 2000, 0, 1, "declaration_any") == (0, True)
+    assert _y(lab, 5, 2000, 0, 2, "declaration_any") == (1, True)
+    assert lab[(lab.country_id == 5) & lab.year.isin([2002, 2003])].empty
+    assert set(lab.loc[lab.stage == 0, "event"]) == {"declaration_any"}
+    assert "declaration_any" not in set(lab.loc[lab.stage == 1, "event"])   # democracies keep H1
+
+
+def test_training_rows_nest_and_keep_democracy_labels(ert, cfg, realtime):
+    st, _, lab = _build_pop(ert, cfg, realtime)
+    p = {name: labels.training_rows(lab, st, cfg, name, 1) for name in ("P1", "P2", "P3")}
+    h1 = lab[(lab.stage == 1) & (lab.event == "declaration") & (lab.k == 1) & lab.observable]
+    assert len(p["P3"]) == len(h1) and (p["P3"]["pop_group"] == "democracy").all()
+    key = ["country_id", "year"]
+    s1, s2, s3 = (set(map(tuple, p[n][key].to_numpy())) for n in ("P1", "P2", "P3"))
+    assert s3 <= s2 <= s1
+    dem = [d[d.pop_group == "democracy"].set_index(key)["y"] for d in p.values()]
+    assert dem[0].equals(dem[1]) and dem[1].equals(dem[2])        # same democracy labels everywhere
+    assert set(p["P2"]["pop_group"]) == {"democracy", "electoral_autocracy"}
+    assert p["P1"].loc[(p["P1"].country_id == 5) & (p["P1"].year == 2001), "y"].item() == 1
+
+
+def test_training_population_requires_any_events(ert, cfg, realtime):
+    cfg["labels"]["state_source"] = "ert_truncated"
+    cfg["training_population"]["enabled"] = True
+    eps = episodes.democratic_episodes(ert, cfg)
+    rt = realtime.drop(columns="rt_in_any_episode")
+    ev = episodes.country_events(eps, rt)
+    st = states.assign_states(ert, eps, cfg, rt)
+    with pytest.raises(ValueError):
+        labels.build_labels(st, ev, cfg)

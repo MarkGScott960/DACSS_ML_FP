@@ -56,3 +56,30 @@ def declaration_timing(events: pd.DataFrame, states: pd.DataFrame, dev_last_orig
     d["still_democracy"] = d["stage"] == 2
     d["period"] = (d["year"] <= dev_last_origin + 1).map({True: "development", False: "later"})
     return d.reset_index(drop=True)
+
+
+def population_counts(labels: pd.DataFrame, states: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Training rows and positives per population x horizon x period x group (decision D-24).
+
+    Outcome-only. Uses ``labels.training_rows``, so the counts are exactly what a model would
+    train on before the fold cutoff. ``period``: development (origins <= dev_last_origin),
+    locked, after_locked.
+    """
+    import numpy as np
+
+    from ..data.labels import training_rows
+
+    sp = cfg["splits"]
+    out = []
+    for pop in cfg["training_population"]["candidates"]:
+        for k in cfg["labels"]["horizons_stage1"]:
+            r = training_rows(labels, states, cfg, pop, k)
+            r["period"] = np.select(
+                [r["year"] <= sp["dev_last_origin"], r["year"] <= sp["locked"]["last_origin"]],
+                ["development", "locked"], default="after_locked")
+            g = r.groupby(["period", "pop_group"]).agg(rows=("y", "size"), positives=("y", "sum")).reset_index()
+            out.append(g.assign(population=pop, k=k))
+    res = pd.concat(out, ignore_index=True)
+    res["base_rate"] = res["positives"] / res["rows"]
+    return res[["population", "k", "period", "pop_group", "rows", "positives", "base_rate"]]
+

@@ -67,7 +67,8 @@ def load_realtime(paths: Paths) -> pd.DataFrame:
 
     Columns: country_id, year, rt_in_dem_episode (in a democratic episode as coded at T),
     rt_post_breakdown (ERT already codes a breakdown inside that episode at T),
-    rt_episode_id, rt_start_year.
+    rt_in_any_episode (in an autocratization episode of any kind as coded at T; training
+    populations P1/P2, decision D-24), rt_episode_id, rt_start_year.
     """
     raw = pd.read_parquet(paths.interim / REALTIME_FILE)
     out = pd.DataFrame(
@@ -76,6 +77,7 @@ def load_realtime(paths: Paths) -> pd.DataFrame:
             "year": raw["trunc_year"].astype("int64"),
             "rt_in_dem_episode": (raw["aut_ep"].fillna(0) == 1) & (raw["aut_ep_prch"].fillna(0) == 1),
             "rt_post_breakdown": raw["aut_ep_pbr"].fillna(0) == 1,
+            "rt_in_any_episode": raw["aut_ep"].fillna(0) == 1,
             "rt_episode_id": raw["aut_ep_id"],
             "rt_start_year": raw["aut_ep_start_year"],
         }
